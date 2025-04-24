@@ -1,0 +1,157 @@
+/* 设置面板标题 */
+.cognilink-settings-title {
+  margin: var(--cognilink-spacing-lg) 0 var(--cognilink-spacing-md);
+  color: var(--cognilink-text-normal);
+  border-bottom: 1px solid var(--cognilink-interactive-normal);
+  padding-bottom: var(--cognilink-spacing-xs);
+}
+
+/* 设置项容器 */
+.setting-item {
+  padding: var(--cognilink-spacing-sm) 0;
+  border-top: none;
+}
+
+.setting-item:not(:last-child) {
+  border-bottom: 1px solid var(--cognilink-interactive-normal);
+}
+
+/* 设置项名称 */
+.setting-item-name {
+  font-weight: var(--font-medium);
+  color: var(--cognilink-text-normal);
+}
+
+/* 设置项描述 */
+.setting-item-description {
+  color: var(--cognilink-text-muted);
+  font-size: 0.9em;
+  margin-top: var(--cognilink-spacing-xs);
+}
+
+/* 设置项控件 */
+.setting-item-control {
+  flex-shrink: 0;
+  margin-left: var(--cognilink-spacing-md);
+}
+
+/* 下拉菜单 */
+.dropdown {
+  background: var(--cognilink-background-primary);
+  border: 1px solid var(--cognilink-interactive-normal);
+  border-radius: var(--cognilink-radius-sm);
+  padding: var(--cognilink-spacing-xs) var(--cognilink-spacing-sm);
+  color: var(--cognilink-text-normal);
+}
+
+.dropdown:hover {
+  border-color: var(--cognilink-interactive-hover);
+}
+
+.dropdown:focus {
+  border-color: var(--cognilink-interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--cognilink-interactive-accent-rgb), 0.2);
+}
+
+/* 输入框 */
+.cognilink-api-key-input {
+  width: 100%;
+  font-family: var(--font-monospace);
+  letter-spacing: 2px;
+}
+
+/* 系统提示词文本框 */
+.cognilink-system-prompt {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  font-family: var(--font-text);
+  line-height: 1.5;
+}
+
+/* 滑块 */
+.slider {
+  -webkit-appearance: none;
+  width: 150px;
+  height: 4px;
+  border-radius: var(--cognilink-radius-sm);
+  background: var(--cognilink-interactive-normal);
+  outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--cognilink-interactive-accent);
+  cursor: pointer;
+  transition: all var(--cognilink-transition-fast);
+}
+
+.slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+/* 开关 */
+.checkbox-container {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.checkbox-container input[type="checkbox"] {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  -webkit-appearance: none;
+  background: var(--cognilink-interactive-normal);
+  border-radius: 10px;
+  transition: all var(--cognilink-transition-fast);
+  cursor: pointer;
+}
+
+.checkbox-container input[type="checkbox"]:checked {
+  background: var(--cognilink-interactive-accent);
+}
+
+.checkbox-container input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  background: var(--cognilink-background-primary);
+  transition: all var(--cognilink-transition-fast);
+}
+
+.checkbox-container input[type="checkbox"]:checked::before {
+  left: 22px;
+}
+
+/* 快捷键输入框 */
+.hotkey-input {
+  font-family: var(--font-monospace);
+  text-align: center;
+  width: 120px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .setting-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .setting-item-control {
+    margin-left: 0;
+    margin-top: var(--cognilink-spacing-sm);
+    width: 100%;
+  }
+
+  .slider {
+    width: 100%;
+  }
+} 
