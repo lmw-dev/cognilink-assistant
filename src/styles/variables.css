@@ -1,0 +1,76 @@
+/* Theme Variables - 映射 Obsidian 主题变量到我们的组件变量 */
+.theme-light {
+  --cognilink-background-primary: var(--background-primary);
+  --cognilink-background-secondary: var(--background-secondary);
+  --cognilink-background-modifier-hover: var(--background-modifier-hover);
+  
+  --cognilink-text-normal: var(--text-normal);
+  --cognilink-text-muted: var(--text-muted);
+  --cognilink-text-faint: var(--text-faint);
+  
+  --cognilink-interactive-normal: var(--interactive-normal);
+  --cognilink-interactive-hover: var(--interactive-hover);
+  --cognilink-interactive-accent: var(--interactive-accent);
+  
+  --cognilink-success-color: var(--color-green);
+  --cognilink-warning-color: var(--color-yellow);
+  --cognilink-error-color: var(--color-red);
+  
+  /* 自定义阴影 */
+  --cognilink-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --cognilink-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05);
+  --cognilink-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.05);
+  
+  /* 自定义圆角 */
+  --cognilink-radius-sm: 4px;
+  --cognilink-radius-md: 6px;
+  --cognilink-radius-lg: 8px;
+  
+  /* 自定义间距 */
+  --cognilink-spacing-xs: 4px;
+  --cognilink-spacing-sm: 8px;
+  --cognilink-spacing-md: 16px;
+  --cognilink-spacing-lg: 24px;
+  
+  /* 动画时间 */
+  --cognilink-transition-fast: 150ms;
+  --cognilink-transition-normal: 250ms;
+  --cognilink-transition-slow: 350ms;
+}
+
+.theme-dark {
+  --cognilink-background-primary: var(--background-primary);
+  --cognilink-background-secondary: var(--background-secondary);
+  --cognilink-background-modifier-hover: var(--background-modifier-hover);
+  
+  --cognilink-text-normal: var(--text-normal);
+  --cognilink-text-muted: var(--text-muted);
+  --cognilink-text-faint: var(--text-faint);
+  
+  --cognilink-interactive-normal: var(--interactive-normal);
+  --cognilink-interactive-hover: var(--interactive-hover);
+  --cognilink-interactive-accent: var(--interactive-accent);
+  
+  --cognilink-success-color: var(--color-green);
+  --cognilink-warning-color: var(--color-yellow);
+  --cognilink-error-color: var(--color-red);
+  
+  /* 暗色主题阴影调整 */
+  --cognilink-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --cognilink-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.2);
+  --cognilink-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.2);
+  
+  /* 保持与亮色主题相同的其他变量 */
+  --cognilink-radius-sm: 4px;
+  --cognilink-radius-md: 6px;
+  --cognilink-radius-lg: 8px;
+  
+  --cognilink-spacing-xs: 4px;
+  --cognilink-spacing-sm: 8px;
+  --cognilink-spacing-md: 16px;
+  --cognilink-spacing-lg: 24px;
+  
+  --cognilink-transition-fast: 150ms;
+  --cognilink-transition-normal: 250ms;
+  --cognilink-transition-slow: 350ms;
+} 

@@ -1,0 +1,128 @@
+/* 全局样式 */
+.cognilink-app {
+  font-family: var(--font-text);
+  color: var(--cognilink-text-normal);
+  background: var(--cognilink-background-primary);
+  transition: background var(--cognilink-transition-normal);
+}
+
+/* 按钮基础样式 */
+.cognilink-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cognilink-spacing-xs) var(--cognilink-spacing-md);
+  border-radius: var(--cognilink-radius-sm);
+  background: var(--cognilink-interactive-normal);
+  color: var(--cognilink-text-normal);
+  cursor: pointer;
+  transition: all var(--cognilink-transition-fast);
+  border: none;
+  outline: none;
+}
+
+.cognilink-button:hover {
+  background: var(--cognilink-interactive-hover);
+}
+
+.cognilink-button:focus {
+  box-shadow: 0 0 0 2px var(--cognilink-interactive-accent);
+}
+
+/* 输入框基础样式 */
+.cognilink-input {
+  width: 100%;
+  padding: var(--cognilink-spacing-xs) var(--cognilink-spacing-sm);
+  border-radius: var(--cognilink-radius-sm);
+  border: 1px solid var(--cognilink-interactive-normal);
+  background: var(--cognilink-background-primary);
+  color: var(--cognilink-text-normal);
+  transition: all var(--cognilink-transition-fast);
+}
+
+.cognilink-input:focus {
+  border-color: var(--cognilink-interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--cognilink-interactive-accent-rgb), 0.2);
+}
+
+/* 卡片基础样式 */
+.cognilink-card {
+  background: var(--cognilink-background-secondary);
+  border-radius: var(--cognilink-radius-md);
+  padding: var(--cognilink-spacing-md);
+  box-shadow: var(--cognilink-shadow-sm);
+  transition: all var(--cognilink-transition-normal);
+}
+
+.cognilink-card:hover {
+  box-shadow: var(--cognilink-shadow-md);
+}
+
+/* 对话框基础样式 */
+.cognilink-dialog {
+  background: var(--cognilink-background-primary);
+  border-radius: var(--cognilink-radius-lg);
+  padding: var(--cognilink-spacing-lg);
+  box-shadow: var(--cognilink-shadow-lg);
+}
+
+.cognilink-dialog-header {
+  margin-bottom: var(--cognilink-spacing-md);
+  font-weight: bold;
+  color: var(--cognilink-text-normal);
+}
+
+.cognilink-dialog-content {
+  color: var(--cognilink-text-muted);
+}
+
+/* 动画类 */
+.cognilink-fade-enter {
+  opacity: 0;
+}
+
+.cognilink-fade-enter-active {
+  opacity: 1;
+  transition: opacity var(--cognilink-transition-normal);
+}
+
+.cognilink-fade-exit {
+  opacity: 1;
+}
+
+.cognilink-fade-exit-active {
+  opacity: 0;
+  transition: opacity var(--cognilink-transition-normal);
+}
+
+/* 响应式布局工具类 */
+@media (max-width: 768px) {
+  .cognilink-hide-mobile {
+    display: none !important;
+  }
+  
+  .cognilink-dialog {
+    padding: var(--cognilink-spacing-md);
+  }
+}
+
+/* 辅助类 */
+.cognilink-text-success {
+  color: var(--cognilink-success-color);
+}
+
+.cognilink-text-warning {
+  color: var(--cognilink-warning-color);
+}
+
+.cognilink-text-error {
+  color: var(--cognilink-error-color);
+}
+
+.cognilink-text-muted {
+  color: var(--cognilink-text-muted);
+}
+
+.cognilink-text-faint {
+  color: var(--cognilink-text-faint);
+} 
