@@ -1,0 +1,33 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# CogniLink Assistant Project Structure
+
+This is an Obsidian plugin for AI-enhanced knowledge management. The project follows a standard React + TypeScript structure.
+
+## Core Files
+- [src/main.ts](mdc:src/main.ts) - Main plugin entry point
+- [manifest.json](mdc:manifest.json) - Plugin manifest
+- [package.json](mdc:package.json) - Project configuration and dependencies
+- [esbuild.config.mjs](mdc:esbuild.config.mjs) - Build configuration
+
+## Key Directories
+- `src/components/` - React components
+  - [src/components/ChatView.tsx](mdc:src/components/ChatView.tsx) - Main chat view container
+  - [src/components/Chat.tsx](mdc:src/components/Chat.tsx) - Chat interface component
+- `src/services/` - Business logic
+  - [src/services/AIService.ts](mdc:src/services/AIService.ts) - AI integration service
+  - [src/services/EmbeddingService.ts](mdc:src/services/EmbeddingService.ts) - Embedding and semantic search
+- `src/types/` - TypeScript type definitions
+  - [src/types/settings.ts](mdc:src/types/settings.ts) - Settings interface
+  - [src/types/chat.ts](mdc:src/types/chat.ts) - Chat-related types
+- `src/constants/` - Constants and defaults
+  - [src/constants/settings.ts](mdc:src/constants/settings.ts) - Default settings
+
+## Configuration Files
+- [tsconfig.json](mdc:tsconfig.json) - TypeScript configuration
+- [.eslintrc](mdc:.eslintrc) - ESLint rules
+- [.prettierrc](mdc:.prettierrc) - Code formatting rules
+- [styles.css](mdc:styles.css) - Global styles

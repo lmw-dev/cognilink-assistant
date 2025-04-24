@@ -1,0 +1,44 @@
+{
+  "name": "cognilink-assistant",
+  "version": "1.0.0",
+  "description": "CogniLink Assistant - An Obsidian plugin for AI-enhanced knowledge management",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "jest",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "obsidian-plugin",
+    "knowledge-management",
+    "ai-assistant",
+    "rag"
+  ],
+  "author": "CogniLink Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.2",
+    "@smithery/sdk": "^1.0.4",
+    "obsidian": "^1.4.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/jest": "^29.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.19.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "prettier": "^3.0.0",
+    "tslib": "^2.6.0",
+    "typescript": "^5.0.0"
+  }
+}
