@@ -58,13 +58,8 @@ export const Chat: React.FC<ChatProps> = ({ plugin }) => {
     <div className="cognilink-chat">
       <div className="chat-messages">
         {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`chat-message ${message.role}`}
-          >
-            <div className="message-content">
-              {message.content}
-            </div>
+          <div key={index} className={`chat-message ${message.role}`}>
+            <div className="message-content">{message.content}</div>
             {message.sources && (
               <div className="message-sources">
                 <small>Sources:</small>
@@ -77,9 +72,7 @@ export const Chat: React.FC<ChatProps> = ({ plugin }) => {
                 </ul>
               </div>
             )}
-            <div className="message-timestamp">
-              {message.timestamp.toLocaleTimeString()}
-            </div>
+            <div className="message-timestamp">{message.timestamp.toLocaleTimeString()}</div>
           </div>
         ))}
         <div ref={messagesEndRef} />
@@ -102,4 +95,4 @@ export const Chat: React.FC<ChatProps> = ({ plugin }) => {
       </form>
     </div>
   );
-}; 
+};

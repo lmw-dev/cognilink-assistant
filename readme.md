@@ -5,6 +5,7 @@ An Obsidian plugin for AI-enhanced knowledge management, leveraging advanced AI 
 ## Technology Stack
 
 ### Core Technologies
+
 - **TypeScript** - Primary programming language
 - **Node.js** - Runtime environment
 - **Obsidian Plugin API** - For plugin integration with Obsidian
@@ -12,6 +13,7 @@ An Obsidian plugin for AI-enhanced knowledge management, leveraging advanced AI 
 - **Smithery SDK** - For additional functionality
 
 ### Development Tools
+
 - **ESBuild** - Bundler and build tool
 - **TypeScript** - Type checking and compilation
 - **Jest** - Testing framework
@@ -35,6 +37,7 @@ cognilink-assistant/
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
+
 - Node.js (v18 or higher)
 - npm (v9 or higher)
 - Obsidian (latest version)
@@ -42,12 +45,14 @@ Before you begin, ensure you have the following installed:
 ## Installation & Setup
 
 1. Clone the repository:
+
    ```bash
    git clone [repository-url]
    cd cognilink-assistant
    ```
 
 2. Install dependencies:
+
    ```bash
    npm install
    ```
@@ -121,11 +126,13 @@ We follow strict coding standards to maintain code quality:
 ## Common Issues & Solutions
 
 ### Development Environment
+
 - If hot-reload isn't working, restart Obsidian
 - Clear the `.cache` directory if build issues occur
 - Check Node.js and npm versions if setup fails
 
 ### Build Issues
+
 - Run `npm clean-install` to resolve dependency issues
 - Check for TypeScript errors: `tsc --noEmit`
 - Verify ESBuild configuration in `esbuild.config.mjs`
@@ -133,6 +140,7 @@ We follow strict coding standards to maintain code quality:
 ## Contact & Support
 
 For internal support and questions:
+
 - Check the `docs` directory for detailed documentation
 - Contact the development team through internal channels
 - Report bugs through the issue tracker

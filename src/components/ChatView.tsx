@@ -40,4 +40,4 @@ export class ChatView extends ItemView {
       this.root = null;
     }
   }
-} 
+}

@@ -45,4 +45,4 @@ if (prod) {
   process.exit(0);
 } else {
   await context.watch();
-} 
+}

@@ -8,4 +8,4 @@ export interface CogniLinkSettings {
   localModelEndpoint?: string;
   embeddingModel: string;
   saveChatsToFolder: string;
-} 
+}

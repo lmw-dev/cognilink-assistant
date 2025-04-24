@@ -1,3 +1,5 @@
+export type MessageRole = 'user' | 'assistant' | 'system';
+
 export interface Source {
   title: string;
   link: string;
@@ -5,7 +7,7 @@ export interface Source {
 }
 
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: MessageRole;
   content: string;
   timestamp: Date;
   sources?: Source[];
@@ -14,4 +16,4 @@ export interface ChatMessage {
 export interface AIResponse {
   content: string;
   sources?: Source[];
-} 
+}

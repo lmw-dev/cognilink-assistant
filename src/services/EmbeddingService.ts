@@ -15,13 +15,13 @@ export class EmbeddingService {
     this.plugin = plugin;
   }
 
-  async findRelevantNotes(query: string): Promise<Note[]> {
+  async findRelevantNotes(_query: string): Promise<Note[]> {
     // TODO: Implement semantic search using embeddings
     // For now, return empty array
     return [];
   }
 
-  private async getEmbedding(text: string): Promise<number[]> {
+  private async getEmbedding(_text: string): Promise<number[]> {
     // TODO: Implement embedding generation using OpenAI or local model
     throw new Error('Embedding generation not implemented yet');
   }
@@ -58,4 +58,4 @@ export class EmbeddingService {
 
     return dotProduct / (magnitudeA * magnitudeB);
   }
-} 
+}

@@ -9,11 +9,11 @@ export default class CogniLinkPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
+    // Add a test notification to verify plugin is loaded
+    new Notice('CogniLink Assistant plugin loaded successfully! 🎉');
+
     // Register Chat View
-    this.registerView(
-      'cognilink-chat',
-      (leaf) => new ChatView(leaf, this)
-    );
+    this.registerView('cognilink-chat', leaf => new ChatView(leaf, this));
 
     // Add ribbon icon for activating chat
     this.addRibbonIcon('message-square', 'Open CogniLink Chat', () => {
@@ -35,7 +35,7 @@ export default class CogniLinkPlugin extends Plugin {
     this.addCommand({
       id: 'check-originality',
       name: 'Check Originality',
-      editorCallback: (editor) => {
+      editorCallback: editor => {
         const selectedText = editor.getSelection();
         if (selectedText) {
           // TODO: Implement originality check
@@ -57,14 +57,15 @@ export default class CogniLinkPlugin extends Plugin {
 
   async activateView() {
     const { workspace } = this.app;
-    
+
     let leaf = workspace.getLeavesOfType('cognilink-chat')[0];
-    
+
     if (!leaf) {
-      leaf = workspace.getRightLeaf(false);
-      await leaf.setViewState({ type: 'cognilink-chat' });
+      // Create a new leaf in the right sidebar
+      leaf = workspace.getLeaf('split');
+      await leaf.setViewState({ type: 'cognilink-chat', active: true });
     }
-    
+
     workspace.revealLeaf(leaf);
   }
 
@@ -88,4 +89,4 @@ class CogniLinkSettingTab extends PluginSettingTab {
 
     // TODO: Add settings UI
   }
-} 
+}
