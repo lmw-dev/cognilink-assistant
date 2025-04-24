@@ -1,92 +1,82 @@
-import * as React from 'react';
-import { Notice } from 'obsidian';
-
-export enum MessageState {
-  SENDING = 'sending',
-  SUCCESS = 'success',
-  ERROR = 'error',
-  LOADING = 'loading',
-  TYPING = 'typing',
-}
+import React, { useEffect, useState } from 'react';
+import { MessageState, MessageLoadingState, MessageTypingState } from '../types/message';
+import { MessageStateManager } from '../utils/messageStateManager';
 
 interface MessageStatusProps {
-  state: MessageState;
-  message?: string;
-  progress?: number;
+  messageId: string;
+  stateManager: MessageStateManager;
   onRetry?: () => void;
 }
 
-interface LoadingDotsProps {
-  color?: string;
-}
-
-const LoadingDots: React.FC<LoadingDotsProps> = ({ color = 'var(--text-muted)' }) => {
-  return (
-    <div className="loading-dots" style={{ color }}>
-      <span>.</span>
-      <span>.</span>
-      <span>.</span>
-    </div>
-  );
-};
-
 export const MessageStatus: React.FC<MessageStatusProps> = ({
-  state,
-  message,
-  progress,
+  messageId,
+  stateManager,
   onRetry,
-}: MessageStatusProps) => {
+}) => {
+  const [messageState, setMessageState] = useState<MessageState>(stateManager.getMessageState());
+  const [loadingState, setLoadingState] = useState<MessageLoadingState>(stateManager.getLoadingState());
+  const [typingState, setTypingState] = useState<MessageTypingState>(stateManager.getTypingState());
+
+  useEffect(() => {
+    const unsubscribeMessage = stateManager.subscribeToMessageState(setMessageState);
+    const unsubscribeLoading = stateManager.subscribeToLoadingState(setLoadingState);
+    const unsubscribeTyping = stateManager.subscribeToTypingState(setTypingState);
+
+    return () => {
+      unsubscribeMessage();
+      unsubscribeLoading();
+      unsubscribeTyping();
+    };
+  }, [stateManager]);
+
   const renderStatus = () => {
-    switch (state) {
-      case MessageState.SENDING:
+    switch (messageState.status) {
+      case 'sending':
         return (
-          <div className="message-status sending">
-            <span className="status-icon">📤</span>
-            <span className="status-text">发送中</span>
-            <LoadingDots />
+          <div className="cognilink-message-status sending">
+            <div className="cognilink-loading-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
           </div>
         );
 
-      case MessageState.SUCCESS:
+      case 'failed':
         return (
-          <div className="message-status success">
-            <span className="status-icon">✅</span>
-            <span className="status-text">{message || '发送成功'}</span>
-          </div>
-        );
-
-      case MessageState.ERROR:
-        return (
-          <div className="message-status error">
-            <span className="status-icon">❌</span>
-            <span className="status-text">{message || '发送失败'}</span>
+          <div className="cognilink-message-status failed">
+            <span className="cognilink-error-icon">❌</span>
             {onRetry && (
-              <button className="retry-button" onClick={onRetry}>
+              <button className="cognilink-retry-button" onClick={onRetry}>
                 重试
               </button>
             )}
           </div>
         );
 
-      case MessageState.LOADING:
+      case 'loading':
         return (
-          <div className="message-status loading">
-            <span className="status-icon">⏳</span>
-            <span className="status-text">{message || '加载中'}</span>
-            {progress !== undefined && (
-              <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${progress}%` }} />
-              </div>
-            )}
+          <div className="cognilink-message-status loading">
+            <div className="cognilink-progress-bar">
+              <div
+                className="cognilink-progress-fill"
+                style={{ width: `${(loadingState.progress / loadingState.total) * 100}%` }}
+              />
+            </div>
           </div>
         );
 
-      case MessageState.TYPING:
+      case 'typing':
         return (
-          <div className="message-status typing">
-            <span className="status-icon">✍️</span>
-            <span className="status-text">正在输入</span>
-            <LoadingDots />
+          <div className="cognilink-message-status typing">
+            <span className="cognilink-typing-text">{typingState.displayedText}</span>
+            {typingState.isTyping && (
+              <div className="cognilink-typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            )}
           </div>
         );
 
@@ -95,5 +85,5 @@ export const MessageStatus: React.FC<MessageStatusProps> = ({
     }
   };
 
-  return <div className="message-status-container">{renderStatus()}</div>;
+  return <div className="cognilink-message-status-container">{renderStatus()}</div>;
 }; 
