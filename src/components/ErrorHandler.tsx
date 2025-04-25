@@ -91,4 +91,4 @@ export class ErrorHandler {
   showWarning(message: string): void {
     new Notice('⚠️ ' + message, 5000);
   }
-} 
+}

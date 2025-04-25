@@ -2,10 +2,16 @@ import { Notice } from 'obsidian';
 import CogniLinkPlugin from '../main';
 import { ChatMessage, AIResponse, MessageRole } from '../types/chat';
 import { EmbeddingService } from './EmbeddingService';
+import { Plugin } from 'obsidian';
+import { Message } from '../types/message';
+import { PluginSettings } from '../types/settings';
 
 // Custom error types
 export class AIServiceError extends Error {
-  constructor(message: string, public code: string) {
+  constructor(
+    message: string,
+    public code: string
+  ) {
     super(message);
     this.name = 'AIServiceError';
   }
@@ -42,136 +48,106 @@ interface APIMessage {
 
 export class AIService {
   private plugin: CogniLinkPlugin;
+  private settings: PluginSettings;
   private embeddingService: EmbeddingService;
 
   constructor(plugin: CogniLinkPlugin) {
     this.plugin = plugin;
+    this.settings = plugin.settings;
     this.embeddingService = new EmbeddingService(plugin);
   }
 
-  async sendMessage(message: string, history: ChatMessage[]): Promise<AIResponse> {
-    const { apiProvider, apiKey } = this.plugin.settings;
+  async sendMessage(message: Message): Promise<Message> {
+    const { provider, apiKey, model } = this.settings.ai;
 
     if (!apiKey) {
-      throw new ConfigurationError('API key not configured. Please configure your API key in the settings.');
+      throw new Error('API 密钥未配置');
     }
 
-    if (!message.trim()) {
-      throw new AIServiceError('Message cannot be empty.', 'VALIDATION_ERROR');
-    }
-
-    try {
-      // Get relevant context from the vault
-      const relevantNotes = await this.embeddingService.findRelevantNotes(message);
-
-      // Prepare context for the AI
-      const context = this.prepareContext(relevantNotes);
-
-      // Prepare messages array for the API
-      const messages: APIMessage[] = [
-        {
-          role: 'system' as MessageRole,
-          content: this.plugin.settings.defaultSystemPrompt,
-        },
-        ...history.map(msg => ({
-          role: msg.role,
-          content: msg.content,
-        })),
-        {
-          role: 'user' as MessageRole,
-          content: `${context}\n\nUser message: ${message}`,
-        },
-      ];
-
-      let response: AIResponse;
-
-      switch (apiProvider) {
-        case 'openai':
-          response = await this.callOpenAI(messages);
-          break;
-        case 'anthropic':
-          response = await this.callAnthropic(messages);
-          break;
-        case 'local':
-          response = await this.callLocalModel(messages);
-          break;
-        default:
-          throw new ConfigurationError(`Unsupported API provider: ${apiProvider}`);
-      }
-
-      return {
-        content: response.content,
-        sources: relevantNotes.map(note => ({
-          title: note.title,
-          link: note.link,
-        })),
-      };
-    } catch (error) {
-      console.error('Error in AIService:', error);
-      
-      if (error instanceof AIServiceError) {
-        throw error;
-      }
-
-      if (error instanceof TypeError || error instanceof NetworkError) {
-        throw new NetworkError('Failed to connect to AI service. Please check your internet connection.');
-      }
-
-      throw new AIServiceError('An unexpected error occurred while processing your request.', 'UNKNOWN_ERROR');
+    switch (provider) {
+      case 'openai':
+        return this.sendToOpenAI(message);
+      case 'anthropic':
+        return this.sendToAnthropic(message);
+      case 'local':
+        return this.sendToLocal(message);
+      default:
+        throw new Error('不支持的 AI 提供商');
     }
   }
 
-  private prepareContext(notes: Note[]): string {
-    if (!notes.length) {
-      return '';
+  private async sendToOpenAI(message: Message): Promise<Message> {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.settings.ai.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.settings.ai.model,
+        messages: [
+          {
+            role: 'system',
+            content: this.settings.ai.defaultSystemPrompt,
+          },
+          {
+            role: 'user',
+            content: message.content,
+          },
+        ],
+        temperature: this.settings.ai.temperature,
+        max_tokens: this.settings.ai.maxTokens,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('OpenAI API 请求失败');
     }
 
-    return `Relevant context from your notes:\n\n${notes
-      .map(note => `From "${note.title}":\n${note.content}\n`)
-      .join('\n')}`;
+    const data = await response.json();
+    return {
+      id: data.id,
+      content: data.choices[0].message.content,
+      role: 'assistant',
+      timestamp: Date.now(),
+    };
   }
 
-  private async callOpenAI(messages: APIMessage[]): Promise<AIResponse> {
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.plugin.settings.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4',
-          messages: messages,
-        }),
-      });
+  private async sendToAnthropic(message: Message): Promise<Message> {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.settings.ai.apiKey,
+      },
+      body: JSON.stringify({
+        model: this.settings.ai.model,
+        messages: [
+          {
+            role: 'user',
+            content: message.content,
+          },
+        ],
+        system: this.settings.ai.defaultSystemPrompt,
+        max_tokens: this.settings.ai.maxTokens,
+      }),
+    });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new APIError(`OpenAI API error: ${error.error?.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      return {
-        content: data.choices[0].message.content,
-      };
-    } catch (error) {
-      if (error instanceof AIServiceError) {
-        throw error;
-      }
-      if (error instanceof TypeError) {
-        throw new NetworkError('Failed to connect to OpenAI API. Please check your internet connection.');
-      }
-      throw new APIError('Failed to get response from OpenAI API.');
+    if (!response.ok) {
+      throw new Error('Anthropic API 请求失败');
     }
+
+    const data = await response.json();
+    return {
+      id: data.id,
+      content: data.content,
+      role: 'assistant',
+      timestamp: Date.now(),
+    };
   }
 
-  private async callAnthropic(messages: APIMessage[]): Promise<AIResponse> {
-    // TODO: Implement Anthropic API call
-    throw new APIError('Anthropic integration not implemented yet');
-  }
-
-  private async callLocalModel(messages: APIMessage[]): Promise<AIResponse> {
-    // TODO: Implement local model API call
-    throw new APIError('Local model integration not implemented yet');
+  private async sendToLocal(message: Message): Promise<Message> {
+    // 本地模型实现
+    throw new Error('本地模型暂未实现');
   }
 }

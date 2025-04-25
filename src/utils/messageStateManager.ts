@@ -1,4 +1,9 @@
-import { MessageState, MessageStatus, MessageLoadingState, MessageTypingState } from '../types/message';
+import {
+  MessageState,
+  MessageStatus,
+  MessageLoadingState,
+  MessageTypingState,
+} from '../types/message';
 
 type MessageStateObserver = (state: MessageState) => void;
 type LoadingStateObserver = (state: MessageLoadingState) => void;
@@ -41,7 +46,11 @@ export class MessageStateManager {
   }
 
   finishLoading() {
-    this.loadingState = { isLoading: false, progress: this.loadingState.total, total: this.loadingState.total };
+    this.loadingState = {
+      isLoading: false,
+      progress: this.loadingState.total,
+      total: this.loadingState.total,
+    };
     this.notifyLoadingObservers();
   }
 
@@ -131,4 +140,4 @@ export class MessageStateManager {
   getTypingState(): MessageTypingState {
     return { ...this.typingState };
   }
-} 
+}

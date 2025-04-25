@@ -1,9 +1,13 @@
 export type AIProvider = 'openai' | 'anthropic' | 'local';
+export type AIModel = 'gpt-4' | 'gpt-3.5-turbo' | 'claude-2' | 'claude-instant';
+export type Theme = 'system' | 'light' | 'dark';
+export type FontSize = 'small' | 'medium' | 'large';
+export type MessageSpacing = 'compact' | 'comfortable' | 'spacious';
 
 export interface UISettings {
-  theme: 'system' | 'light' | 'dark';
-  fontSize: 'small' | 'medium' | 'large';
-  messageSpacing: 'compact' | 'comfortable';
+  theme: Theme;
+  fontSize: FontSize;
+  messageSpacing: MessageSpacing;
   showTimestamp: boolean;
   enableAnimations: boolean;
 }
@@ -11,7 +15,7 @@ export interface UISettings {
 export interface AISettings {
   provider: AIProvider;
   apiKey: string;
-  model: string;
+  model: AIModel;
   temperature: number;
   maxTokens: number;
   defaultSystemPrompt: string;

@@ -1,92 +1,104 @@
-import { Plugin, PluginSettingTab, App, Notice } from 'obsidian';
-import { DEFAULT_SETTINGS } from './constants/settings';
-import { CogniLinkSettings } from './types/settings';
+import { Plugin, Notice, addIcon, WorkspaceLeaf, ViewState } from 'obsidian';
+import { PluginSettings } from './types/settings';
+import { SettingsTab } from './components/SettingsTab';
+import { SettingsManager } from './services/SettingsManager';
+import { SettingsStorage } from './utils/SettingsStorage';
 import { ChatView } from './components/ChatView';
 
+// Define the chat icon
+const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+</svg>`;
+
+export const VIEW_TYPE_CHAT = 'cognilink-chat';
+
 export default class CogniLinkPlugin extends Plugin {
-  settings: CogniLinkSettings;
+  settings: PluginSettings;
+  settingsManager: SettingsManager;
 
   async onload() {
-    await this.loadSettings();
+    const storage = new SettingsStorage();
+    this.settingsManager = new SettingsManager(this.app, this, storage);
+    await this.settingsManager.loadSettings();
+    this.settings = this.settingsManager.getSettings();
 
-    // Add a test notification to verify plugin is loaded
-    new Notice('CogniLink Assistant plugin loaded successfully! 🎉');
+    // Register chat icon
+    addIcon('cognilink-chat', CHAT_ICON);
 
-    // Register Chat View
-    this.registerView('cognilink-chat', leaf => new ChatView(leaf, this));
+    // Register chat view type
+    this.registerView(
+      VIEW_TYPE_CHAT,
+      (leaf) => new ChatView(leaf, this)
+    );
 
-    // Add ribbon icon for activating chat
-    this.addRibbonIcon('message-square', 'Open CogniLink Chat', () => {
-      this.activateView();
+    // Add ribbon icon
+    this.addRibbonIcon('cognilink-chat', 'CogniLink Assistant', async () => {
+      await this.activateView();
     });
 
-    // Add settings tab
-    this.addSettingTab(new CogniLinkSettingTab(this.app, this));
-
-    // Add commands
+    // Add command to toggle chat
     this.addCommand({
-      id: 'open-cognilink-chat',
-      name: 'Open Chat',
-      callback: () => {
-        this.activateView();
-      },
+      id: 'toggle-cognilink-chat',
+      name: 'Toggle CogniLink Chat',
+      callback: () => this.activateView(),
+      hotkeys: [
+        {
+          modifiers: ['Mod', 'Shift'],
+          key: 'c',
+        },
+      ],
     });
 
-    this.addCommand({
-      id: 'check-originality',
-      name: 'Check Originality',
-      editorCallback: editor => {
-        const selectedText = editor.getSelection();
-        if (selectedText) {
-          // TODO: Implement originality check
-          new Notice('Originality check coming soon!');
-        } else {
-          new Notice('Please select some text to check originality.');
-        }
-      },
+    // Initialize the view
+    this.app.workspace.onLayoutReady(() => {
+      this.initLeaf();
     });
+
+    // 添加设置面板
+    this.addSettingTab(new SettingsTab(this.app, this));
+
+    // 添加通知以验证插件已加载
+    new Notice('CogniLink 插件已加载');
   }
 
-  async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-  }
-
-  async saveSettings() {
-    await this.saveData(this.settings);
+  async onunload() {
+    // 清理资源
+    new Notice('CogniLink 插件已卸载');
   }
 
   async activateView() {
     const { workspace } = this.app;
-
-    let leaf = workspace.getLeavesOfType('cognilink-chat')[0];
-
+    
+    let leaf = workspace.getLeavesOfType(VIEW_TYPE_CHAT)[0];
+    
     if (!leaf) {
-      // Create a new leaf in the right sidebar
-      leaf = workspace.getLeaf('split');
-      await leaf.setViewState({ type: 'cognilink-chat', active: true });
+      const newLeaf = workspace.getRightLeaf(false);
+      if (newLeaf) {
+        await newLeaf.setViewState({ type: VIEW_TYPE_CHAT });
+        leaf = newLeaf;
+      }
     }
-
-    workspace.revealLeaf(leaf);
+    
+    if (leaf) {
+      workspace.revealLeaf(leaf);
+    }
   }
 
-  onunload() {
-    // Clean up plugin resources
-  }
-}
-
-class CogniLinkSettingTab extends PluginSettingTab {
-  plugin: CogniLinkPlugin;
-
-  constructor(app: App, plugin: CogniLinkPlugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
-
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.createEl('h2', { text: 'CogniLink Settings' });
-
-    // TODO: Add settings UI
+  async initLeaf() {
+    const { workspace } = this.app;
+    
+    // Check if view already exists
+    let leaf = workspace.getLeavesOfType(VIEW_TYPE_CHAT)[0];
+    
+    if (!leaf) {
+      // Create leaf in left sidebar
+      const newLeaf = workspace.getLeftLeaf(false);
+      if (newLeaf) {
+        await newLeaf.setViewState({
+          type: VIEW_TYPE_CHAT,
+          active: true,
+        } as ViewState);
+      }
+    }
   }
 }

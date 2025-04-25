@@ -1,63 +1,61 @@
 import { AIService } from '../AIService';
 import CogniLinkPlugin from '../../main';
-import { ChatMessage, MessageRole } from '../../types/chat';
-import { DEFAULT_SETTINGS } from '../../constants/settings';
-import { App, Plugin, PluginManifest } from 'obsidian';
-
-// Mock CogniLinkPlugin
-jest.mock('../../main', () => {
-  const MockPlugin = jest.fn().mockImplementation((app: App, manifest: PluginManifest) => ({
-    settings: {},
-  }));
-  return MockPlugin;
-});
+import { Message } from '../../types/message';
 
 describe('AIService', () => {
   let plugin: CogniLinkPlugin;
   let aiService: AIService;
 
   beforeEach(() => {
-    const mockApp = {} as App;
-    const mockManifest = {} as PluginManifest;
-    plugin = new CogniLinkPlugin(mockApp, mockManifest);
+    plugin = {
+      settings: {
+        ai: {
+          provider: 'openai',
+          apiKey: 'test-key',
+          model: 'gpt-4',
+          temperature: 0.7,
+          maxTokens: 2000,
+          defaultSystemPrompt: '你是一个智能助手',
+        },
+        ui: {
+          theme: 'system',
+          fontSize: 'medium',
+          messageSpacing: 'comfortable',
+          showTimestamp: true,
+          enableAnimations: true,
+        },
+        shortcuts: {
+          toggleChat: 'Mod+Shift+C',
+          newChat: 'Mod+Shift+N',
+          focusInput: 'Mod+Shift+I',
+        },
+      },
+    } as CogniLinkPlugin;
+
     aiService = new AIService(plugin);
   });
 
-  describe('sendMessage', () => {
-    it('should throw error when API key is not configured', async () => {
-      const message = 'Test message';
-      const history: ChatMessage[] = [];
+  it('should throw error when API key is not configured', async () => {
+    plugin.settings.ai.apiKey = '';
+    const message: Message = {
+      id: 'test-id',
+      content: 'Hello',
+      role: 'user',
+      timestamp: Date.now(),
+    };
 
-      await expect(aiService.sendMessage(message, history)).rejects.toThrow(
-        'API key not configured'
-      );
-    });
+    await expect(aiService.sendMessage(message)).rejects.toThrow('API 密钥未配置');
+  });
 
-    it('should handle successful message sending', async () => {
-      // Mock plugin settings
-      plugin.settings = {
-        ...DEFAULT_SETTINGS,
-        apiKey: 'test-key',
-      };
+  it('should throw error for unsupported provider', async () => {
+    plugin.settings.ai.provider = 'unsupported' as any;
+    const message: Message = {
+      id: 'test-id',
+      content: 'Hello',
+      role: 'user',
+      timestamp: Date.now(),
+    };
 
-      const message = 'Test message';
-      const history: ChatMessage[] = [
-        {
-          role: 'user' as MessageRole,
-          content: 'Previous message',
-          timestamp: new Date(),
-        },
-        {
-          role: 'assistant' as MessageRole,
-          content: 'Previous response',
-          timestamp: new Date(),
-        },
-      ];
-
-      // This will throw "OpenAI integration not implemented yet" as per the actual implementation
-      await expect(aiService.sendMessage(message, history)).rejects.toThrow(
-        'OpenAI integration not implemented yet'
-      );
-    });
+    await expect(aiService.sendMessage(message)).rejects.toThrow('不支持的 AI 提供商');
   });
 });

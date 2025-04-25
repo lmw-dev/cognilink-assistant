@@ -1,13 +1,24 @@
-import { CogniLinkSettings } from '../types/settings';
+import { PluginSettings } from '../types/settings';
 
-export const DEFAULT_SETTINGS: CogniLinkSettings = {
-  apiProvider: 'openai',
-  apiKey: '',
-  defaultSystemPrompt:
-    'You are a helpful AI assistant that helps users manage and create knowledge in their Obsidian vault.',
-  maxContextMessages: 10,
-  similarityThreshold: 0.8,
-  enableOriginalityCheck: true,
-  embeddingModel: 'text-embedding-3-small',
-  saveChatsToFolder: 'chats',
+export const DEFAULT_SETTINGS: PluginSettings = {
+  ui: {
+    theme: 'system',
+    fontSize: 'medium',
+    messageSpacing: 'comfortable',
+    showTimestamp: true,
+    enableAnimations: true,
+  },
+  ai: {
+    provider: 'openai',
+    apiKey: '',
+    model: 'gpt-4',
+    temperature: 0.7,
+    maxTokens: 2000,
+    defaultSystemPrompt: '你是一个智能助手，请帮助我完成任务。',
+  },
+  shortcuts: {
+    toggleChat: 'Mod+Shift+C',
+    newChat: 'Mod+Shift+N',
+    focusInput: 'Mod+Shift+I',
+  },
 };
