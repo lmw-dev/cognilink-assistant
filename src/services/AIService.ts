@@ -1,155 +1,94 @@
 import { Notice } from 'obsidian';
 import CogniLinkPlugin from '../main';
-import { ChatMessage, AIResponse, MessageRole } from '../types/chat';
-import { EmbeddingService } from './EmbeddingService';
-import { Plugin } from 'obsidian';
-import { Message } from '../types/message';
+import { Message, MessageRole } from '../types/message';
 import { PluginSettings } from '../types/settings';
+import { Logger } from '../utils/logger';
+import { Settings } from '../types/settings';
 
-// Custom error types
 export class AIServiceError extends Error {
-  constructor(
-    message: string,
-    public code: string
-  ) {
+  constructor(message: string) {
     super(message);
     this.name = 'AIServiceError';
   }
 }
 
-export class ConfigurationError extends AIServiceError {
+export class ConfigurationError extends Error {
   constructor(message: string) {
-    super(message, 'CONFIGURATION_ERROR');
+    super(message);
+    this.name = 'ConfigurationError';
   }
 }
 
 export class APIError extends AIServiceError {
   constructor(message: string) {
-    super(message, 'API_ERROR');
+    super(message);
+    this.name = 'APIError';
   }
 }
 
 export class NetworkError extends AIServiceError {
   constructor(message: string) {
-    super(message, 'NETWORK_ERROR');
+    super(message);
+    this.name = 'NetworkError';
   }
-}
-
-interface Note {
-  title: string;
-  content: string;
-  link: string;
-}
-
-interface APIMessage {
-  role: MessageRole;
-  content: string;
 }
 
 export class AIService {
   private plugin: CogniLinkPlugin;
-  private settings: PluginSettings;
-  private embeddingService: EmbeddingService;
+  private settings: Settings;
+  private logger: Logger;
 
   constructor(plugin: CogniLinkPlugin) {
+    console.log('[AIService] Constructor called');
     this.plugin = plugin;
     this.settings = plugin.settings;
-    this.embeddingService = new EmbeddingService(plugin);
+    this.logger = new Logger('AIService');
+    
+    // 详细记录初始化信息
+    console.log('[AIService] Initializing with settings:', {
+      provider: this.settings.ai.provider,
+      model: this.settings.ai.model,
+      hasAnthropicKey: !!this.settings.ai.anthropicApiKey,
+    });
+    
+    // 记录加载的模块
+    console.log('[AIService] Loaded modules:', {
+      obsidian: !!Notice,
+      settings: !!this.settings,
+      logger: !!this.logger,
+    });
   }
 
   async sendMessage(message: Message): Promise<Message> {
-    const { provider } = this.settings.ai;
-
-    switch (provider) {
-      case 'openai':
-        if (!this.settings.ai.openAIApiKey) {
-          throw new ConfigurationError('OpenAI API 密钥未配置');
-        }
-        return this.sendToOpenAI(message);
-      case 'anthropic':
-        if (!this.settings.ai.anthropicApiKey) {
-          throw new ConfigurationError('Anthropic API 密钥未配置');
-        }
-        return this.sendToAnthropic(message);
-      case 'local':
-        return this.sendToLocal(message);
-      default:
-        throw new ConfigurationError('不支持的 AI 提供商');
-    }
-  }
-
-  private async sendToOpenAI(message: Message): Promise<Message> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.settings.ai.openAIApiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.settings.ai.model,
-        messages: [
-          {
-            role: 'system',
-            content: this.settings.ai.defaultSystemPrompt,
-          },
-          {
-            role: 'user',
-            content: message.content,
-          },
-        ],
-        temperature: this.settings.ai.temperature,
-        max_tokens: this.settings.ai.maxTokens,
-      }),
+    console.log('[AIService] sendMessage called with:', {
+      messageId: message.id,
+      role: message.role,
+      timestamp: message.timestamp,
     });
-
-    if (!response.ok) {
-      throw new Error('OpenAI API 请求失败');
-    }
-
-    const data = await response.json();
-    return {
-      id: data.id,
-      content: data.choices[0].message.content,
-      role: 'assistant',
+    
+    this.logger.info('Sending message', { 
+      provider: this.settings.ai.provider,
+      model: this.settings.ai.model,
+    });
+    
+    // 临时返回模拟响应
+    const response: Message = {
+      id: Date.now().toString(),
+      role: 'assistant' as MessageRole,
+      content: '这是一个模拟响应。AI 功能正在开发中。',
       timestamp: Date.now(),
     };
+    
+    console.log('[AIService] Returning mock response:', response);
+    return response;
   }
 
-  private async sendToAnthropic(message: Message): Promise<Message> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.settings.ai.anthropicApiKey,
-      },
-      body: JSON.stringify({
-        model: this.settings.ai.model,
-        messages: [
-          {
-            role: 'user',
-            content: message.content,
-          },
-        ],
-        system: this.settings.ai.defaultSystemPrompt,
-        max_tokens: this.settings.ai.maxTokens,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Anthropic API 请求失败');
-    }
-
-    const data = await response.json();
-    return {
-      id: data.id,
-      content: data.content,
-      role: 'assistant',
-      timestamp: Date.now(),
-    };
-  }
-
-  private async sendToLocal(message: Message): Promise<Message> {
-    // 本地模型实现
-    throw new Error('本地模型暂未实现');
+  async generateEmbeddings(text: string): Promise<number[]> {
+    console.log('[AIService] generateEmbeddings called with text length:', text.length);
+    
+    // 临时返回模拟的嵌入向量
+    const embeddings = Array(1536).fill(0).map(() => Math.random());
+    console.log('[AIService] Returning mock embeddings of length:', embeddings.length);
+    return embeddings;
   }
 }

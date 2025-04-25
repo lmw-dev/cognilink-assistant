@@ -1,12 +1,25 @@
-export type AIProvider = 'openai' | 'anthropic' | 'local';
-export type AIModel = 'gpt-4' | 'gpt-3.5-turbo' | 'claude-2' | 'claude-instant';
+export type AIProvider = 'anthropic' | 'local';
+export type AIModel = 'claude-2' | 'claude-instant';
 export type Theme = 'system' | 'light' | 'dark';
 export type FontSize = 'small' | 'medium' | 'large';
 export type MessageSpacing = 'compact' | 'comfortable' | 'spacious';
 
+export interface ShortcutKey {
+  key: string;
+  modifiers: string[];
+}
+
+export interface Shortcuts {
+  toggleChat: ShortcutKey;
+  sendMessage: ShortcutKey;
+  newChat: ShortcutKey;
+  clearChat: ShortcutKey;
+}
+
 export interface UISettings {
+  fontSize: number;
+  fontFamily: string;
   theme: Theme;
-  fontSize: FontSize;
   messageSpacing: MessageSpacing;
   showTimestamp: boolean;
   enableAnimations: boolean;
@@ -14,44 +27,54 @@ export interface UISettings {
 
 export interface AISettings {
   provider: AIProvider;
-  openAIApiKey: string;
-  anthropicApiKey: string;
   model: AIModel;
-  temperature: number;
+  anthropicApiKey: string;
   maxTokens: number;
+  temperature: number;
   defaultSystemPrompt: string;
 }
 
-export interface PluginSettings {
+export interface Settings {
   ui: UISettings;
   ai: AISettings;
-  shortcuts: {
-    toggleChat: string;
-    newChat: string;
-    focusInput: string;
-  };
+  shortcuts: Shortcuts;
 }
+
+export type PluginSettings = Settings;
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   ui: {
     theme: 'system',
-    fontSize: 'medium',
+    fontSize: 16,
+    fontFamily: 'Arial',
     messageSpacing: 'comfortable',
     showTimestamp: true,
-    enableAnimations: true,
+    enableAnimations: true
   },
   ai: {
-    provider: 'openai',
-    openAIApiKey: '',
+    provider: 'anthropic',
+    model: 'claude-2',
     anthropicApiKey: '',
-    model: 'gpt-4',
-    temperature: 0.7,
     maxTokens: 2000,
-    defaultSystemPrompt: '你是一个智能助手，请帮助我完成任务。',
+    temperature: 0.7,
+    defaultSystemPrompt: 'You are a helpful AI assistant.'
   },
   shortcuts: {
-    toggleChat: 'Mod+Shift+C',
-    newChat: 'Mod+Shift+N',
-    focusInput: 'Mod+Shift+I',
-  },
+    toggleChat: {
+      key: 'c',
+      modifiers: ['Mod', 'Shift']
+    },
+    sendMessage: {
+      key: 'Enter',
+      modifiers: ['Mod']
+    },
+    newChat: {
+      key: 'n',
+      modifiers: ['Mod', 'Shift']
+    },
+    clearChat: {
+      key: 'l',
+      modifiers: ['Mod', 'Shift']
+    }
+  }
 };

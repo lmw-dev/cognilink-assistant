@@ -1,244 +1,179 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import CogniLinkPlugin from '../main';
-import { AIProvider, Theme, FontSize, MessageSpacing, AIModel } from '../types/settings';
+import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing } from '../types/settings';
 
 export class SettingsTab extends PluginSettingTab {
   plugin: CogniLinkPlugin;
+  settings: PluginSettings;
 
   constructor(app: App, plugin: CogniLinkPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+    this.settings = plugin.settings;
   }
 
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
 
-    // 主标题
-    containerEl.createEl('h2', { text: 'CogniLink 设置' });
-
-    // AI 服务设置
-    containerEl.createEl('h3', { text: 'AI 服务设置' });
-
-    // AI 提供商
+    // AI Provider Settings
     new Setting(containerEl)
-      .setName('AI 提供商')
-      .setDesc('选择要使用的 AI 服务提供商')
-      .addDropdown(dropdown => {
-        dropdown
-          .addOption('openai', 'OpenAI')
-          .addOption('anthropic', 'Anthropic')
-          .addOption('local', '本地模型')
-          .setValue(this.plugin.settings.ai.provider)
-          .onChange(async (value: string) => {
-            const provider = value as AIProvider;
-            let defaultModel: AIModel;
-            
-            // 根据提供商设置默认模型
-            if (provider === 'openai') {
-              defaultModel = 'gpt-4';
-            } else if (provider === 'anthropic') {
-              defaultModel = 'claude-2';
-            } else {
-              defaultModel = 'gpt-4'; // 本地模型默认使用 gpt-4
-            }
+      .setName('AI Provider')
+      .setDesc('选择 AI 服务提供商')
+      .addDropdown(dropdown => dropdown
+        .addOption('anthropic', 'Anthropic')
+        .addOption('local', 'Local')
+        .setValue(this.settings.ai.provider)
+        .onChange(async (value: AIProvider) => {
+          this.settings.ai.provider = value;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
 
-            await this.plugin.settingsManager.updateAISettings({
-              provider,
-              model: defaultModel,
-            });
-            
-            // 重新渲染设置页面
-            this.display();
-          });
-        return dropdown;
-      });
-
-    // API 密钥
-    if (this.plugin.settings.ai.provider === 'openai') {
-      new Setting(containerEl)
-        .setName('OpenAI API 密钥')
-        .setDesc('输入 OpenAI 服务的 API 密钥')
-        .addText(text => text
-          .setPlaceholder('输入 OpenAI API 密钥')
-          .setValue(this.plugin.settings.ai.openAIApiKey)
-          .onChange(async (value: string) => {
-            await this.plugin.settingsManager.updateAISettings({
-              openAIApiKey: value,
-            });
-          }));
-    }
-
-    // Anthropic API 密钥
-    if (this.plugin.settings.ai.provider === 'anthropic') {
-      new Setting(containerEl)
-        .setName('Anthropic API 密钥')
-        .setDesc('输入 Anthropic 服务的 API 密钥')
-        .addText(text => text
-          .setPlaceholder('输入 Anthropic API 密钥')
-          .setValue(this.plugin.settings.ai.anthropicApiKey)
-          .onChange(async (value: string) => {
-            await this.plugin.settingsManager.updateAISettings({
-              anthropicApiKey: value,
-            });
-          }));
-    }
-
-    // 模型选择
+    // Model Selection
     new Setting(containerEl)
-      .setName('AI 模型')
-      .setDesc('选择要使用的 AI 模型')
+      .setName('AI Model')
+      .setDesc('选择 AI 模型')
       .addDropdown(dropdown => {
-        if (this.plugin.settings.ai.provider === 'openai') {
-          dropdown
-            .addOption('gpt-4', 'GPT-4')
-            .addOption('gpt-3.5-turbo', 'GPT-3.5 Turbo');
-        } else if (this.plugin.settings.ai.provider === 'anthropic') {
+        if (this.settings.ai.provider === 'anthropic') {
           dropdown
             .addOption('claude-2', 'Claude 2')
             .addOption('claude-instant', 'Claude Instant');
         }
-        dropdown.setValue(this.plugin.settings.ai.model)
-          .onChange(async (value: string) => {
-            await this.plugin.settingsManager.updateAISettings({
-              model: value as AIModel,
-            });
-            // 重新渲染设置页面
-            this.display();
+        return dropdown
+          .setValue(this.settings.ai.model)
+          .onChange(async (value: AIModel) => {
+            this.settings.ai.model = value;
+            await this.plugin.saveSettings();
           });
-        return dropdown;
       });
 
-    // 温度参数
-    new Setting(containerEl)
-      .setName('温度')
-      .setDesc('控制 AI 回复的随机性（0-1），越高越具有创造性，越低越保守')
-      .addSlider(slider => {
-        slider
-          .setLimits(0, 1, 0.1)
-          .setValue(this.plugin.settings.ai.temperature)
-          .onChange(async (value: number) => {
-            await this.plugin.settingsManager.updateAISettings({
-              temperature: value,
-            });
-          });
-        return slider;
-      });
+    // Anthropic API Key
+    if (this.settings.ai.provider === 'anthropic') {
+      new Setting(containerEl)
+        .setName('Anthropic API Key')
+        .setDesc('输入你的 Anthropic API Key')
+        .addText(text => text
+          .setPlaceholder('sk-ant-...')
+          .setValue(this.settings.ai.anthropicApiKey)
+          .onChange(async (value) => {
+            this.settings.ai.anthropicApiKey = value;
+            await this.plugin.saveSettings();
+          }));
+    }
 
-    // 最大 Token 数
+    // Temperature
     new Setting(containerEl)
-      .setName('最大 Token 数')
-      .setDesc('单次对话最大 token 数量（1000-4000）')
-      .addSlider(slider => {
-        slider
-          .setLimits(1000, 4000, 100)
-          .setValue(this.plugin.settings.ai.maxTokens)
-          .onChange(async (value: number) => {
-            await this.plugin.settingsManager.updateAISettings({
-              maxTokens: value,
-            });
-          });
-        return slider;
-      });
-
-    // 系统提示词
-    new Setting(containerEl)
-      .setName('系统提示词')
-      .setDesc('设置 AI 助手的角色和行为')
-      .addTextArea(text => text
-        .setPlaceholder('输入系统提示词')
-        .setValue(this.plugin.settings.ai.defaultSystemPrompt)
-        .onChange(async (value: string) => {
-          await this.plugin.settingsManager.updateAISettings({
-            defaultSystemPrompt: value,
-          });
+      .setName('Temperature')
+      .setDesc('控制 AI 回复的随机性（0-1），越高越具有创造性')
+      .addSlider(slider => slider
+        .setLimits(0, 1, 0.1)
+        .setValue(this.settings.ai.temperature)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.settings.ai.temperature = value;
+          await this.plugin.saveSettings();
         }));
 
-    // 界面设置
-    containerEl.createEl('h3', { text: '界面设置' });
-
-    // 主题
+    // Max Tokens
     new Setting(containerEl)
-      .setName('主题')
+      .setName('Max Tokens')
+      .setDesc('单次对话最大 token 数量')
+      .addSlider(slider => slider
+        .setLimits(1000, 4000, 100)
+        .setValue(this.settings.ai.maxTokens)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.settings.ai.maxTokens = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // System Prompt
+    new Setting(containerEl)
+      .setName('System Prompt')
+      .setDesc('设置 AI 助手的系统提示词')
+      .addTextArea(text => text
+        .setValue(this.settings.ai.defaultSystemPrompt)
+        .onChange(async (value) => {
+          this.settings.ai.defaultSystemPrompt = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // UI Settings
+    containerEl.createEl('h3', { text: 'UI Settings' });
+
+    // Theme
+    new Setting(containerEl)
+      .setName('Theme')
       .setDesc('选择界面主题')
-      .addDropdown(dropdown => {
-        dropdown
-          .addOption('system', '跟随系统')
-          .addOption('light', '浅色')
-          .addOption('dark', '深色')
-          .setValue(this.plugin.settings.ui.theme)
-          .onChange(async (value: string) => {
-            await this.plugin.settingsManager.updateUISettings({
-              theme: value as Theme,
-            });
-          });
-        return dropdown;
-      });
+      .addDropdown(dropdown => dropdown
+        .addOption('light', 'Light')
+        .addOption('dark', 'Dark')
+        .addOption('system', 'System')
+        .setValue(this.settings.ui.theme)
+        .onChange(async (value: Theme) => {
+          this.settings.ui.theme = value;
+          await this.plugin.saveSettings();
+        }));
 
-    // 字体大小
+    // Font Size
     new Setting(containerEl)
-      .setName('字体大小')
-      .setDesc('调整界面字体大小')
-      .addDropdown(dropdown => {
-        dropdown
-          .addOption('small', '小')
-          .addOption('medium', '中')
-          .addOption('large', '大')
-          .setValue(this.plugin.settings.ui.fontSize)
-          .onChange(async (value: string) => {
-            await this.plugin.settingsManager.updateUISettings({
-              fontSize: value as FontSize,
-            });
-          });
-        return dropdown;
-      });
+      .setName('Font Size')
+      .setDesc('设置字体大小')
+      .addSlider(slider => slider
+        .setLimits(12, 24, 1)
+        .setValue(this.settings.ui.fontSize)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.settings.ui.fontSize = value;
+          await this.plugin.saveSettings();
+        }));
 
-    // 消息间距
+    // Font Family
     new Setting(containerEl)
-      .setName('消息间距')
-      .setDesc('调整消息之间的间距')
-      .addDropdown(dropdown => {
-        dropdown
-          .addOption('compact', '紧凑')
-          .addOption('comfortable', '舒适')
-          .addOption('spacious', '宽松')
-          .setValue(this.plugin.settings.ui.messageSpacing)
-          .onChange(async (value: string) => {
-            await this.plugin.settingsManager.updateUISettings({
-              messageSpacing: value as MessageSpacing,
-            });
-          });
-        return dropdown;
-      });
+      .setName('Font Family')
+      .setDesc('设置字体')
+      .addText(text => text
+        .setValue(this.settings.ui.fontFamily)
+        .onChange(async (value) => {
+          this.settings.ui.fontFamily = value;
+          await this.plugin.saveSettings();
+        }));
 
-    // 时间戳显示
+    // Message Spacing
     new Setting(containerEl)
-      .setName('显示时间戳')
-      .setDesc('在消息中显示发送时间')
-      .addToggle(toggle => {
-        toggle
-          .setValue(this.plugin.settings.ui.showTimestamp)
-          .onChange(async (value: boolean) => {
-            await this.plugin.settingsManager.updateUISettings({
-              showTimestamp: value,
-            });
-          });
-        return toggle;
-      });
+      .setName('Message Spacing')
+      .setDesc('设置消息间距')
+      .addDropdown(dropdown => dropdown
+        .addOption('compact', 'Compact')
+        .addOption('comfortable', 'Comfortable')
+        .addOption('spacious', 'Spacious')
+        .setValue(this.settings.ui.messageSpacing)
+        .onChange(async (value: MessageSpacing) => {
+          this.settings.ui.messageSpacing = value;
+          await this.plugin.saveSettings();
+        }));
 
-    // 动画效果
+    // Show Timestamp
     new Setting(containerEl)
-      .setName('启用动画')
-      .setDesc('启用界面过渡动画效果')
-      .addToggle(toggle => {
-        toggle
-          .setValue(this.plugin.settings.ui.enableAnimations)
-          .onChange(async (value: boolean) => {
-            await this.plugin.settingsManager.updateUISettings({
-              enableAnimations: value,
-            });
-          });
-        return toggle;
-      });
+      .setName('Show Timestamp')
+      .setDesc('显示消息时间戳')
+      .addToggle(toggle => toggle
+        .setValue(this.settings.ui.showTimestamp)
+        .onChange(async (value) => {
+          this.settings.ui.showTimestamp = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Enable Animations
+    new Setting(containerEl)
+      .setName('Enable Animations')
+      .setDesc('启用界面动画')
+      .addToggle(toggle => toggle
+        .setValue(this.settings.ui.enableAnimations)
+        .onChange(async (value) => {
+          this.settings.ui.enableAnimations = value;
+          await this.plugin.saveSettings();
+        }));
   }
 }

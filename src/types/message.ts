@@ -1,4 +1,4 @@
-export type MessageRole = 'user' | 'assistant' | 'system';
+export type MessageRole = 'user' | 'assistant' | 'system' | 'error';
 export type MessageStatus = 'sending' | 'sent' | 'failed' | 'loading' | 'typing';
 
 export interface Message {

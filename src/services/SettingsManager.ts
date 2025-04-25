@@ -3,7 +3,7 @@ import { PluginSettings, DEFAULT_SETTINGS } from '../types/settings';
 import CogniLinkPlugin from '../main';
 import { EventEmitter } from 'events';
 import { validateSettings } from '../utils/settingsValidator';
-import { SettingsStorage } from '../utils/SettingsStorage';
+import { SettingsStorage } from './SettingsStorage';
 
 export type SettingsChangeListener = (settings: PluginSettings) => void;
 
@@ -16,10 +16,11 @@ export class SettingsManager extends EventEmitter {
 
   constructor(app: App, plugin: CogniLinkPlugin, storage: SettingsStorage) {
     super();
+    console.log('Initializing SettingsManager');
     this.app = app;
     this.plugin = plugin;
     this.storage = storage;
-    this.settings = { ...DEFAULT_SETTINGS };
+    this.settings = DEFAULT_SETTINGS;
   }
 
   /**
@@ -33,18 +34,36 @@ export class SettingsManager extends EventEmitter {
    * 加载设置
    */
   async loadSettings(): Promise<void> {
-    this.settings = await this.storage.loadSettings();
-    this.plugin.settings = this.settings;
-    this.emit('settingsChanged', this.settings);
+    console.log('Loading settings...');
+    try {
+      const savedSettings = await this.storage.loadSettings();
+      this.settings = {
+        ...DEFAULT_SETTINGS,
+        ...savedSettings
+      };
+      console.log('Settings loaded:', this.settings);
+      this.plugin.settings = this.settings;
+      this.emit('settingsChanged', this.settings);
+    } catch (error) {
+      console.error('Error loading settings:', error);
+      this.settings = DEFAULT_SETTINGS;
+    }
   }
 
   /**
    * 保存设置
    */
   async saveSettings(): Promise<void> {
-    await this.storage.saveSettings(this.settings);
-    this.plugin.settings = this.settings;
-    this.emit('settingsChanged', this.settings);
+    console.log('Saving settings:', this.settings);
+    try {
+      await this.storage.saveSettings(this.settings);
+      console.log('Settings saved successfully');
+      this.plugin.settings = this.settings;
+      this.emit('settingsChanged', this.settings);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      throw error;
+    }
   }
 
   /**
@@ -52,6 +71,7 @@ export class SettingsManager extends EventEmitter {
    * @param settings - 要更新的设置
    */
   async updateSettings(settings: Partial<PluginSettings>): Promise<void> {
+    console.log('Updating settings:', settings);
     this.settings = {
       ...this.settings,
       ...settings,
@@ -174,9 +194,6 @@ export class SettingsManager extends EventEmitter {
    */
   private validateProvider(): boolean {
     const { provider } = this.settings.ai;
-    if (provider === 'openai' && !this.settings.ai.openAIApiKey) {
-      return false;
-    }
     if (provider === 'anthropic' && !this.settings.ai.anthropicApiKey) {
       return false;
     }

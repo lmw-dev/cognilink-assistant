@@ -1,12 +1,13 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 import * as React from 'react';
-import { createRoot, Root } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import { Chat } from './Chat';
+import { VIEW_TYPE_CHAT } from '../main';
 import CogniLinkPlugin from '../main';
 
 export class ChatView extends ItemView {
-  root: Root | null = null;
-  plugin: CogniLinkPlugin;
+  private root: ReturnType<typeof createRoot> | null = null;
+  private plugin: CogniLinkPlugin;
 
   constructor(leaf: WorkspaceLeaf, plugin: CogniLinkPlugin) {
     super(leaf);
@@ -14,7 +15,7 @@ export class ChatView extends ItemView {
   }
 
   getViewType(): string {
-    return 'cognilink-chat';
+    return VIEW_TYPE_CHAT;
   }
 
   getDisplayText(): string {
@@ -24,14 +25,17 @@ export class ChatView extends ItemView {
   async onOpen(): Promise<void> {
     const container = this.containerEl.children[1];
     container.empty();
-    container.createEl('div', { attr: { id: 'cognilink-chat-root' } });
-
-    this.root = createRoot(container.children[0] as HTMLElement);
-    this.root.render(
-      <React.StrictMode>
-        <Chat plugin={this.plugin} />
-      </React.StrictMode>
-    );
+    container.createEl('div', { attr: { id: 'chat-root' } });
+    
+    const chatRoot = container.querySelector('#chat-root');
+    if (chatRoot) {
+      this.root = createRoot(chatRoot);
+      this.root.render(
+        <React.StrictMode>
+          <Chat plugin={this.plugin} />
+        </React.StrictMode>
+      );
+    }
   }
 
   async onClose(): Promise<void> {

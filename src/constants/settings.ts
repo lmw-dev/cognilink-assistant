@@ -1,25 +1,38 @@
 import { PluginSettings } from '../types/settings';
 
-export const DEFAULT_SETTINGS: PluginSettings = {
-  ui: {
-    theme: 'system',
-    fontSize: 'medium',
-    messageSpacing: 'comfortable',
-    showTimestamp: true,
-    enableAnimations: true,
+export const DEFAULT_UI_SETTINGS: PluginSettings['ui'] = {
+  theme: 'system',
+  fontSize: 16,
+  fontFamily: 'Arial',
+  messageSpacing: 'comfortable',
+  showTimestamp: true,
+  enableAnimations: true
+};
+
+export const DEFAULT_AI_SETTINGS: PluginSettings['ai'] = {
+  provider: 'anthropic',
+  model: 'claude-2',
+  anthropicApiKey: '',
+  maxTokens: 2000,
+  temperature: 0.7,
+  defaultSystemPrompt: 'You are a helpful AI assistant.'
+};
+
+export const DEFAULT_SHORTCUTS: PluginSettings['shortcuts'] = {
+  toggleChat: {
+    key: 'c',
+    modifiers: ['Mod', 'Shift']
   },
-  ai: {
-    provider: 'openai',
-    openAIApiKey: '',
-    anthropicApiKey: '',
-    model: 'gpt-4',
-    temperature: 0.7,
-    maxTokens: 2000,
-    defaultSystemPrompt: '你是一个智能助手，请帮助我完成任务。',
+  sendMessage: {
+    key: 'Enter',
+    modifiers: ['Mod']
   },
-  shortcuts: {
-    toggleChat: 'Mod+Shift+C',
-    newChat: 'Mod+Shift+N',
-    focusInput: 'Mod+Shift+I',
+  newChat: {
+    key: 'n',
+    modifiers: ['Mod', 'Shift']
   },
+  clearChat: {
+    key: 'l',
+    modifiers: ['Mod', 'Shift']
+  }
 };

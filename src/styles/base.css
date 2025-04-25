@@ -125,4 +125,38 @@
 
 .cognilink-text-faint {
   color: var(--cognilink-text-faint);
+}
+
+/* 错误边界样式 */
+.cognilink-error-boundary {
+  padding: var(--cognilink-spacing-lg);
+  text-align: center;
+  background: var(--cognilink-background-secondary);
+  border-radius: var(--cognilink-radius-md);
+  margin: var(--cognilink-spacing-md);
+}
+
+.cognilink-error-boundary h3 {
+  color: var(--cognilink-error-color);
+  margin-bottom: var(--cognilink-spacing-md);
+}
+
+.cognilink-error-boundary p {
+  color: var(--cognilink-text-muted);
+  margin-bottom: var(--cognilink-spacing-md);
+  word-break: break-word;
+}
+
+.cognilink-error-boundary button {
+  background: var(--cognilink-interactive-accent);
+  color: var(--cognilink-text-on-accent);
+  padding: var(--cognilink-spacing-sm) var(--cognilink-spacing-md);
+  border-radius: var(--cognilink-radius-sm);
+  border: none;
+  cursor: pointer;
+  transition: background var(--cognilink-transition-fast);
+}
+
+.cognilink-error-boundary button:hover {
+  background: var(--cognilink-interactive-accent-hover);
 } 
