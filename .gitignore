@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ---> Node
 # Logs
 logs
@@ -141,3 +142,44 @@ docs/_book
 # TODO: where does this rule come from?
 test/
 
+=======
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+build/
+dist/
+
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# TypeScript
+*.tsbuildinfo
+
+# Obsidian specific
+.obsidian/
+data.json 
+>>>>>>> develop

@@ -1,0 +1,14 @@
+# .eslintignore
+build/
+dist/
+node_modules/
+coverage/
+*.min.js
+*.d.ts
+.git/
+.vscode/
+package-lock.json
+yarn.lock
+esbuild.config.mjs  # 添加这一行来忽略 ESLint 检查
+jest.config.js
+jest.setup.js

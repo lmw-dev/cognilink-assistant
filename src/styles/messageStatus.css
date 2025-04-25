@@ -1,0 +1,124 @@
+/* 消息状态容器 */
+.cognilink-message-status-container {
+  display: flex;
+  align-items: center;
+  margin: var(--cognilink-spacing-xs) 0;
+}
+
+/* 基础状态样式 */
+.cognilink-message-status {
+  display: flex;
+  align-items: center;
+  padding: var(--cognilink-spacing-xs) var(--cognilink-spacing-sm);
+  border-radius: var(--cognilink-radius-sm);
+  background: var(--cognilink-background-secondary);
+  transition: all var(--cognilink-transition-fast);
+}
+
+/* 发送中状态 */
+.cognilink-message-status.sending {
+  color: var(--cognilink-text-muted);
+}
+
+.cognilink-loading-dots {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cognilink-loading-dots span {
+  width: 4px;
+  height: 4px;
+  background: currentColor;
+  border-radius: 50%;
+  animation: loading-dots 1s infinite;
+}
+
+.cognilink-loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.cognilink-loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes loading-dots {
+  0%, 100% { transform: scale(0.5); opacity: 0.5; }
+  50% { transform: scale(1); opacity: 1; }
+}
+
+/* 失败状态 */
+.cognilink-message-status.failed {
+  color: var(--cognilink-error-color);
+}
+
+.cognilink-retry-button {
+  margin-left: var(--cognilink-spacing-xs);
+  padding: 2px var(--cognilink-spacing-xs);
+  border: 1px solid currentColor;
+  border-radius: var(--cognilink-radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: all var(--cognilink-transition-fast);
+}
+
+.cognilink-retry-button:hover {
+  background: var(--cognilink-error-color);
+  color: var(--cognilink-background-primary);
+}
+
+/* 加载状态 */
+.cognilink-message-status.loading {
+  width: 100%;
+}
+
+.cognilink-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--cognilink-background-modifier-hover);
+  border-radius: var(--cognilink-radius-sm);
+  overflow: hidden;
+}
+
+.cognilink-progress-fill {
+  height: 100%;
+  background: var(--cognilink-interactive-accent);
+  transition: width var(--cognilink-transition-normal);
+}
+
+/* 打字状态 */
+.cognilink-message-status.typing {
+  color: var(--cognilink-text-muted);
+}
+
+.cognilink-typing-text {
+  margin-right: var(--cognilink-spacing-xs);
+}
+
+.cognilink-typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cognilink-typing-indicator span {
+  width: 3px;
+  height: 3px;
+  background: currentColor;
+  border-radius: 50%;
+  animation: typing-indicator 1s infinite;
+}
+
+.cognilink-typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.cognilink-typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing-indicator {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+} 
