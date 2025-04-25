@@ -1,13 +1,17 @@
 import { PluginSettings, DEFAULT_SETTINGS } from '../types/settings';
-
-const SETTINGS_KEY = 'cognilink_settings';
+import CogniLinkPlugin from '../main';
 
 export class SettingsStorage {
+  private plugin: CogniLinkPlugin;
+
+  constructor(plugin: CogniLinkPlugin) {
+    this.plugin = plugin;
+  }
+
   async loadSettings(): Promise<PluginSettings> {
     try {
-      const settingsJson = localStorage.getItem(SETTINGS_KEY);
-      if (!settingsJson) return { ...DEFAULT_SETTINGS };
-      return JSON.parse(settingsJson) as PluginSettings;
+      const settings = await this.plugin.loadData();
+      return settings ? { ...DEFAULT_SETTINGS, ...settings } : { ...DEFAULT_SETTINGS };
     } catch (error) {
       console.error('Failed to load settings:', error);
       return { ...DEFAULT_SETTINGS };
@@ -16,8 +20,7 @@ export class SettingsStorage {
 
   async saveSettings(settings: PluginSettings): Promise<void> {
     try {
-      const settingsJson = JSON.stringify(settings);
-      localStorage.setItem(SETTINGS_KEY, settingsJson);
+      await this.plugin.saveData(settings);
     } catch (error) {
       console.error('Failed to save settings:', error);
       throw new Error('Failed to save settings');
@@ -30,7 +33,7 @@ export class SettingsStorage {
 
   async clear(): Promise<void> {
     try {
-      localStorage.removeItem(SETTINGS_KEY);
+      await this.plugin.saveData({});
     } catch (error) {
       console.error('Failed to clear settings:', error);
       throw new Error('Failed to clear settings');

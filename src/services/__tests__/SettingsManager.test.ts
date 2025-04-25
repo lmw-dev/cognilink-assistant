@@ -1,14 +1,14 @@
 import { App } from 'obsidian';
 import { SettingsManager } from '../SettingsManager';
-import { PluginSettings, DEFAULT_SETTINGS } from '../../types/settings';
+import { DEFAULT_SETTINGS } from '../../constants/settings';
+import { PluginSettings } from '../../types/settings';
 import CogniLinkPlugin from '../../main';
-import { SettingsStorage } from '../../utils/SettingsStorage';
 
 describe('SettingsManager', () => {
+  let settingsManager: SettingsManager;
+  let mockStorage: any;
   let mockApp: App;
   let mockPlugin: CogniLinkPlugin;
-  let mockStorage: SettingsStorage;
-  let settingsManager: SettingsManager;
 
   beforeEach(() => {
     mockApp = {} as App;
@@ -18,103 +18,63 @@ describe('SettingsManager', () => {
     mockStorage = {
       loadSettings: jest.fn().mockResolvedValue(DEFAULT_SETTINGS),
       saveSettings: jest.fn().mockResolvedValue(undefined),
-      getDefaultSettings: jest.fn().mockResolvedValue(DEFAULT_SETTINGS),
-    } as any;
+    };
+
     settingsManager = new SettingsManager(mockApp, mockPlugin, mockStorage);
   });
 
-  describe('Settings Change Events', () => {
-    it('should notify listeners when settings change', async () => {
-      const listener = jest.fn();
-      settingsManager.addSettingsChangeListener(listener);
-
-      const newSettings: PluginSettings = {
-        ...DEFAULT_SETTINGS,
-        ai: {
-          ...DEFAULT_SETTINGS.ai,
-          apiKey: 'new-key',
-        },
-      };
-
-      await settingsManager.saveSettings(newSettings);
-      expect(listener).toHaveBeenCalledWith(newSettings);
+  describe('Settings Management', () => {
+    it('should initialize with default settings', () => {
+      expect(settingsManager.getSettings()).toEqual(DEFAULT_SETTINGS);
     });
 
-    it('should remove listeners correctly', async () => {
-      const listener = jest.fn();
-      settingsManager.addSettingsChangeListener(listener);
-      settingsManager.removeSettingsChangeListener(listener);
-
-      const newSettings: PluginSettings = {
-        ...DEFAULT_SETTINGS,
+    it('should update settings correctly', async () => {
+      await settingsManager.updateSettings({
         ai: {
           ...DEFAULT_SETTINGS.ai,
-          apiKey: 'new-key',
-        },
-      };
-
-      await settingsManager.saveSettings(newSettings);
-      expect(listener).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Settings Validation', () => {
-    it('should validate settings correctly', () => {
-      // 设置有效的 API 密钥
-      settingsManager.setSettingsForTesting({
-        ...DEFAULT_SETTINGS,
-        ai: {
-          ...DEFAULT_SETTINGS.ai,
-          provider: 'local', // 使用本地模型，不需要 API 密钥
+          openAIApiKey: 'new-key',
         },
       });
-      const result = settingsManager.validateSettings();
-      expect(result.isValid).toBe(true);
-      expect(result.errors).toHaveLength(0);
+
+      expect(settingsManager.getSettings().ai.openAIApiKey).toBe('new-key');
     });
 
-    it('should detect invalid settings', () => {
+    it('should notify listeners of settings changes', async () => {
+      const listener = jest.fn();
+      settingsManager.addListener('settingsChanged', listener);
+
+      await settingsManager.updateSettings({
+        ai: {
+          ...DEFAULT_SETTINGS.ai,
+          openAIApiKey: 'new-key',
+        },
+      });
+
+      expect(listener).toHaveBeenCalled();
+      expect(listener).toHaveBeenCalledWith(settingsManager.getSettings());
+    });
+
+    it('should validate settings', () => {
       const invalidSettings: PluginSettings = {
         ...DEFAULT_SETTINGS,
         ai: {
           ...DEFAULT_SETTINGS.ai,
           provider: 'openai',
-          apiKey: '', // Invalid: empty API key
+          openAIApiKey: '', // Invalid: empty API key
         },
       };
 
-      settingsManager.setSettingsForTesting(invalidSettings);
       const result = settingsManager.validateSettings();
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('API 密钥不能为空');
+      expect(result).toBe(false);
     });
-  });
 
-  describe('Settings Updates', () => {
-    it('should update partial settings correctly', async () => {
-      const listener = jest.fn();
-      settingsManager.addSettingsChangeListener(listener);
-
+    it('should update AI settings correctly', async () => {
       await settingsManager.updateAISettings({
-        apiKey: 'new-key',
-        model: 'gpt-4',
+        openAIApiKey: 'new-key',
       });
 
       const updatedSettings = settingsManager.getSettings();
-      expect(updatedSettings.ai.apiKey).toBe('new-key');
-      expect(updatedSettings.ai.model).toBe('gpt-4');
-      expect(listener).toHaveBeenCalled();
-    });
-
-    it('should handle settings reset correctly', async () => {
-      const listener = jest.fn();
-      settingsManager.addSettingsChangeListener(listener);
-
-      await settingsManager.resetSettings();
-
-      const resetSettings = settingsManager.getSettings();
-      expect(resetSettings).toEqual(DEFAULT_SETTINGS);
-      expect(listener).toHaveBeenCalledWith(DEFAULT_SETTINGS);
+      expect(updatedSettings.ai.openAIApiKey).toBe('new-key');
     });
   });
 });

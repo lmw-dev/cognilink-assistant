@@ -31,25 +31,58 @@ export class SettingsTab extends PluginSettingTab {
           .addOption('local', '本地模型')
           .setValue(this.plugin.settings.ai.provider)
           .onChange(async (value: string) => {
+            const provider = value as AIProvider;
+            let defaultModel: AIModel;
+            
+            // 根据提供商设置默认模型
+            if (provider === 'openai') {
+              defaultModel = 'gpt-4';
+            } else if (provider === 'anthropic') {
+              defaultModel = 'claude-2';
+            } else {
+              defaultModel = 'gpt-4'; // 本地模型默认使用 gpt-4
+            }
+
             await this.plugin.settingsManager.updateAISettings({
-              provider: value as AIProvider,
+              provider,
+              model: defaultModel,
             });
+            
+            // 重新渲染设置页面
+            this.display();
           });
         return dropdown;
       });
 
     // API 密钥
-    new Setting(containerEl)
-      .setName('API 密钥')
-      .setDesc('输入 AI 服务的 API 密钥')
-      .addText(text => text
-        .setPlaceholder('输入 API 密钥')
-        .setValue(this.plugin.settings.ai.apiKey)
-        .onChange(async (value: string) => {
-          await this.plugin.settingsManager.updateAISettings({
-            apiKey: value,
-          });
-        }));
+    if (this.plugin.settings.ai.provider === 'openai') {
+      new Setting(containerEl)
+        .setName('OpenAI API 密钥')
+        .setDesc('输入 OpenAI 服务的 API 密钥')
+        .addText(text => text
+          .setPlaceholder('输入 OpenAI API 密钥')
+          .setValue(this.plugin.settings.ai.openAIApiKey)
+          .onChange(async (value: string) => {
+            await this.plugin.settingsManager.updateAISettings({
+              openAIApiKey: value,
+            });
+          }));
+    }
+
+    // Anthropic API 密钥
+    if (this.plugin.settings.ai.provider === 'anthropic') {
+      new Setting(containerEl)
+        .setName('Anthropic API 密钥')
+        .setDesc('输入 Anthropic 服务的 API 密钥')
+        .addText(text => text
+          .setPlaceholder('输入 Anthropic API 密钥')
+          .setValue(this.plugin.settings.ai.anthropicApiKey)
+          .onChange(async (value: string) => {
+            await this.plugin.settingsManager.updateAISettings({
+              anthropicApiKey: value,
+            });
+          }));
+    }
 
     // 模型选择
     new Setting(containerEl)
@@ -70,6 +103,8 @@ export class SettingsTab extends PluginSettingTab {
             await this.plugin.settingsManager.updateAISettings({
               model: value as AIModel,
             });
+            // 重新渲染设置页面
+            this.display();
           });
         return dropdown;
       });

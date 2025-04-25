@@ -2,7 +2,10 @@ import { PluginSettings, AIProvider } from '../types/settings';
 
 export function validateSettings(settings: PluginSettings): boolean {
   // Validate API key if AI provider requires it
-  if ((settings.ai.provider === 'openai' || settings.ai.provider === 'anthropic') && !settings.ai.apiKey) {
+  if (settings.ai.provider === 'openai' && !settings.ai.openAIApiKey) {
+    return false;
+  }
+  if (settings.ai.provider === 'anthropic' && !settings.ai.anthropicApiKey) {
     return false;
   }
 

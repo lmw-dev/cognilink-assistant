@@ -58,21 +58,23 @@ export class AIService {
   }
 
   async sendMessage(message: Message): Promise<Message> {
-    const { provider, apiKey, model } = this.settings.ai;
-
-    if (!apiKey) {
-      throw new Error('API 密钥未配置');
-    }
+    const { provider } = this.settings.ai;
 
     switch (provider) {
       case 'openai':
+        if (!this.settings.ai.openAIApiKey) {
+          throw new ConfigurationError('OpenAI API 密钥未配置');
+        }
         return this.sendToOpenAI(message);
       case 'anthropic':
+        if (!this.settings.ai.anthropicApiKey) {
+          throw new ConfigurationError('Anthropic API 密钥未配置');
+        }
         return this.sendToAnthropic(message);
       case 'local':
         return this.sendToLocal(message);
       default:
-        throw new Error('不支持的 AI 提供商');
+        throw new ConfigurationError('不支持的 AI 提供商');
     }
   }
 
@@ -81,7 +83,7 @@ export class AIService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.settings.ai.apiKey}`,
+        Authorization: `Bearer ${this.settings.ai.openAIApiKey}`,
       },
       body: JSON.stringify({
         model: this.settings.ai.model,
@@ -118,7 +120,7 @@ export class AIService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': this.settings.ai.apiKey,
+        'x-api-key': this.settings.ai.anthropicApiKey,
       },
       body: JSON.stringify({
         model: this.settings.ai.model,

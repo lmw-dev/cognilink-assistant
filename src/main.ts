@@ -4,6 +4,7 @@ import { SettingsTab } from './components/SettingsTab';
 import { SettingsManager } from './services/SettingsManager';
 import { SettingsStorage } from './utils/SettingsStorage';
 import { ChatView } from './components/ChatView';
+import { ChatManager } from './services/ChatManager';
 
 // Define the chat icon
 const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -15,12 +16,17 @@ export const VIEW_TYPE_CHAT = 'cognilink-chat';
 export default class CogniLinkPlugin extends Plugin {
   settings: PluginSettings;
   settingsManager: SettingsManager;
+  chatManager: ChatManager;
 
   async onload() {
-    const storage = new SettingsStorage();
+    // Initialize settings storage with plugin instance
+    const storage = new SettingsStorage(this);
     this.settingsManager = new SettingsManager(this.app, this, storage);
     await this.settingsManager.loadSettings();
     this.settings = this.settingsManager.getSettings();
+
+    // Initialize chat manager
+    this.chatManager = new ChatManager(this);
 
     // Register chat icon
     addIcon('cognilink-chat', CHAT_ICON);

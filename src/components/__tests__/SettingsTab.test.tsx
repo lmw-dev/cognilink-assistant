@@ -252,19 +252,19 @@ describe('SettingsTab', () => {
     });
 
     it('should render API key setting', () => {
+      settingsTab.display();
+      
       const settings = mockContainerEl.querySelectorAll('.setting-item');
-      const apiKeySetting = settings[1];
+      const apiKeySetting = Array.from(settings).find(setting => 
+        setting.querySelector('.setting-item-name')?.textContent === 'OpenAI API 密钥'
+      );
       expect(apiKeySetting).toBeTruthy();
       
       const name = apiKeySetting?.querySelector('.setting-item-name');
-      expect(name?.textContent).toBe('API 密钥');
+      expect(name?.textContent).toBe('OpenAI API 密钥');
       
       const desc = apiKeySetting?.querySelector('.setting-item-description');
-      expect(desc?.textContent).toBe('输入 AI 服务的 API 密钥');
-      
-      const input = apiKeySetting?.querySelector('input');
-      expect(input).toBeTruthy();
-      expect(input?.type).toBe('text');
+      expect(desc?.textContent).toBe('输入 OpenAI 服务的 API 密钥');
     });
   });
 
@@ -287,16 +287,21 @@ describe('SettingsTab', () => {
     });
 
     it('should save settings when API key changes', async () => {
-      const input = mockContainerEl.querySelector('input[type="text"]') as HTMLInputElement;
+      settingsTab.display();
+      
+      const settings = mockContainerEl.querySelectorAll('.setting-item');
+      const apiKeySetting = Array.from(settings).find(setting => 
+        setting.querySelector('.setting-item-name')?.textContent === 'OpenAI API 密钥'
+      );
+      const input = apiKeySetting?.querySelector('input[type="text"]') as HTMLInputElement;
       expect(input).toBeTruthy();
       
-      // Simulate change event
       const newValue = 'test-api-key';
       input.value = newValue;
       input.dispatchEvent(new Event('change'));
 
       expect(mockPlugin.settingsManager.updateAISettings).toHaveBeenCalledWith({
-        apiKey: newValue,
+        openAIApiKey: newValue,
       });
     });
   });

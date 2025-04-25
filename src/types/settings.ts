@@ -14,7 +14,8 @@ export interface UISettings {
 
 export interface AISettings {
   provider: AIProvider;
-  apiKey: string;
+  openAIApiKey: string;
+  anthropicApiKey: string;
   model: AIModel;
   temperature: number;
   maxTokens: number;
@@ -41,7 +42,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   },
   ai: {
     provider: 'openai',
-    apiKey: '',
+    openAIApiKey: '',
+    anthropicApiKey: '',
     model: 'gpt-4',
     temperature: 0.7,
     maxTokens: 2000,
