@@ -20,6 +20,7 @@
   "author": "CogniLink Team",
   "license": "MIT",
   "dependencies": {
+    "@smithery/cli": "^1.1.79",
     "@types/uuid": "^10.0.0",
     "obsidian": "^1.4.0",
     "react": "^18.2.0",
@@ -28,7 +29,7 @@
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
+    "@testing-library/react": "^13.4.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",

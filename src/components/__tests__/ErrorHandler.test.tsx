@@ -1,3 +1,6 @@
+/**
+ * @jest-environment jsdom
+ */
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react';
 import { ErrorHandler } from '../ErrorHandler';

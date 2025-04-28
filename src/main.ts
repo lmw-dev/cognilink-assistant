@@ -9,6 +9,7 @@ import { KeyboardManager } from './services/KeyboardManager';
 import { AccessibilityManager } from './services/AccessibilityManager';
 import { EmbeddingService } from './services/EmbeddingService';
 import { AIService } from './services/AIService';
+import { NoteMetaService } from './services/NoteMetaService';
 
 // Define the chat icon
 const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -99,6 +100,50 @@ export default class CogniLinkPlugin extends Plugin {
         hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'c' }],
       });
 
+      this.addCommand({
+        id: 'test-note-meta',
+        name: '测试笔记元数据解析',
+        callback: async () => {
+          const service = new NoteMetaService(this.app);
+          const notes = await service.getAllNotesMeta();
+          new Notice(`共解析到 ${notes.length} 个笔记`);
+          console.log('NoteMetaService 测试结果:', notes);
+        }
+      });
+
+      console.log('Registering plugin commands...');
+      this.addCommand({
+        id: 'start-new-chat',
+        name: '新建聊天',
+        callback: () => {
+          this.chatManager?.startNewChat?.();
+        }
+      });
+      this.addCommand({
+        id: 'clear-chat-history',
+        name: '清空聊天记录',
+        callback: () => {
+          this.chatManager?.clearChat?.();
+        }
+      });
+      this.addCommand({
+        id: 'copy-last-message',
+        name: '复制最后一条消息',
+        callback: () => {
+          this.chatManager?.copyLastMessage?.();
+        }
+      });
+      this.addCommand({
+        id: 'check-originality',
+        name: '检查原创性',
+        callback: () => {
+          // TODO: 调用原创性检测服务
+          new Notice('原创性检测功能开发中');
+        }
+      });
+      console.log('Plugin commands registered.');
+
+      // 注册 SettingsTab 必须在 settings 加载后
       this.addSettingTab(new SettingsTab(this.app, this));
 
       // Initialize the view

@@ -8,6 +8,11 @@ export class ChatManager {
     this.plugin = plugin;
   }
 
+  startNewChat(): void {
+    // TODO: 实现新建聊天逻辑
+    new Notice('已新建聊天会话');
+  }
+
   clearChat(): void {
     // TODO: 实现清空聊天记录的功能
     new Notice('聊天记录已清空');

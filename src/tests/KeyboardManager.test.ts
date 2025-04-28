@@ -3,6 +3,17 @@ import { KeyboardManager } from '../services/KeyboardManager';
 import CogniLinkPlugin from '../main';
 import { ChatManager } from '../services/ChatManager';
 
+// Mock obsidian Scope
+jest.mock('obsidian', () => {
+  const original = jest.requireActual('obsidian');
+  return {
+    ...original,
+    Scope: jest.fn().mockImplementation(() => ({
+      // 可根据需要添加 mock 方法
+    })),
+  };
+});
+
 describe('KeyboardManager', () => {
   let keyboardManager: KeyboardManager;
   let mockApp: Partial<App>;

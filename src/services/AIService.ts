@@ -71,6 +71,14 @@ export class AIService {
       model: this.settings.ai.model,
     });
     
+    // 新增异常处理逻辑
+    if (this.settings.ai.provider === 'anthropic' && !this.settings.ai.anthropicApiKey) {
+      throw new ConfigurationError('Anthropic API key is missing');
+    }
+    if (this.settings.ai.provider !== 'anthropic' && this.settings.ai.provider !== 'local') {
+      throw new Error('Unsupported AI provider');
+    }
+    
     // 临时返回模拟响应
     const response: Message = {
       id: Date.now().toString(),

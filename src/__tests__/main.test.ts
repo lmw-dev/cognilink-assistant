@@ -1,6 +1,17 @@
+jest.mock('../services/ChatManager', () => {
+  return {
+    ChatManager: jest.fn().mockImplementation(() => ({
+      startNewChat: jest.fn(),
+      clearChat: jest.fn(),
+      copyLastMessage: jest.fn(),
+    })),
+  };
+});
+
 import { App, Notice, Plugin, PluginSettingTab } from 'obsidian';
 import CogniLinkPlugin from '../main';
 import { SettingsManager } from '../services/SettingsManager';
+import { ChatManager } from '../services/ChatManager';
 
 // Mock the Obsidian modules
 jest.mock('obsidian', () => ({
@@ -31,6 +42,7 @@ jest.mock('obsidian', () => ({
     this.onClose = jest.fn().mockResolvedValue(undefined);
   }),
   addIcon: jest.fn(),
+  Scope: jest.fn().mockImplementation(() => ({})),
 }));
 
 describe('CogniLinkPlugin', () => {
@@ -66,13 +78,61 @@ describe('CogniLinkPlugin', () => {
       description: 'An AI-powered assistant for enhancing your knowledge management in Obsidian',
       isDesktopOnly: true,
     });
+    // 修复：确保 settings 结构完整，避免 provider undefined
+    plugin.settings = {
+      ui: {
+        theme: 'system',
+        fontSize: 16,
+        fontFamily: 'Arial',
+        messageSpacing: 'comfortable',
+        showTimestamp: true,
+        enableAnimations: true
+      },
+      ai: {
+        provider: 'anthropic',
+        model: 'claude-2',
+        anthropicApiKey: 'test-key',
+        maxTokens: 2000,
+        temperature: 0.7,
+        defaultSystemPrompt: 'You are a helpful AI assistant.'
+      },
+      shortcuts: {
+        toggleChat: { key: 'c', modifiers: ['Mod', 'Shift'] },
+        sendMessage: { key: 'Enter', modifiers: ['Mod'] },
+        newChat: { key: 'n', modifiers: ['Mod', 'Shift'] },
+        clearChat: { key: 'l', modifiers: ['Mod', 'Shift'] }
+      }
+    };
   });
 
   describe('onload', () => {
     it('should initialize settings and show load notice', async () => {
       // Mock SettingsManager
       const mockLoadSettings = jest.fn();
-      const mockGetSettings = jest.fn().mockReturnValue({});
+      const mockGetSettings = jest.fn().mockReturnValue({
+        ui: {
+          theme: 'system',
+          fontSize: 16,
+          fontFamily: 'Arial',
+          messageSpacing: 'comfortable',
+          showTimestamp: true,
+          enableAnimations: true
+        },
+        ai: {
+          provider: 'anthropic',
+          model: 'claude-2',
+          anthropicApiKey: 'test-key',
+          maxTokens: 2000,
+          temperature: 0.7,
+          defaultSystemPrompt: 'You are a helpful AI assistant.'
+        },
+        shortcuts: {
+          toggleChat: { key: 'c', modifiers: ['Mod', 'Shift'] },
+          sendMessage: { key: 'Enter', modifiers: ['Mod'] },
+          newChat: { key: 'n', modifiers: ['Mod', 'Shift'] },
+          clearChat: { key: 'l', modifiers: ['Mod', 'Shift'] }
+        }
+      });
       jest.spyOn(SettingsManager.prototype, 'loadSettings').mockImplementation(mockLoadSettings);
       jest.spyOn(SettingsManager.prototype, 'getSettings').mockImplementation(mockGetSettings);
 
@@ -99,6 +159,47 @@ describe('CogniLinkPlugin', () => {
 
       // Verify unload notice was shown
       expect(Notice).toHaveBeenCalledWith('CogniLink 插件已卸载');
+    });
+  });
+
+  describe('command registration', () => {
+    it('should register and call start-new-chat command', async () => {
+      const commands: any[] = [];
+      plugin.addCommand = ((cmd: any) => { commands.push(cmd); return cmd; }) as any;
+      await plugin.onload();
+      const startCmd = commands.find(c => c.id === 'start-new-chat');
+      expect(startCmd).toBeDefined();
+      startCmd.callback();
+      const chatManagerInstance = (ChatManager as jest.Mock).mock.instances[0];
+      console.log('plugin.chatManager:', plugin.chatManager);
+      console.log('ChatManager mock instances:', (ChatManager as jest.Mock).mock.instances);
+      expect(plugin.chatManager.startNewChat).toHaveBeenCalled();
+    });
+
+    it('should register and call clear-chat-history command', async () => {
+      const commands: any[] = [];
+      plugin.addCommand = ((cmd: any) => { commands.push(cmd); return cmd; }) as any;
+      await plugin.onload();
+      const clearCmd = commands.find(c => c.id === 'clear-chat-history');
+      expect(clearCmd).toBeDefined();
+      clearCmd.callback();
+      const chatManagerInstance = (ChatManager as jest.Mock).mock.instances[0];
+      console.log('plugin.chatManager:', plugin.chatManager);
+      console.log('ChatManager mock instances:', (ChatManager as jest.Mock).mock.instances);
+      expect(plugin.chatManager.clearChat).toHaveBeenCalled();
+    });
+
+    it('should register and call copy-last-message command', async () => {
+      const commands: any[] = [];
+      plugin.addCommand = ((cmd: any) => { commands.push(cmd); return cmd; }) as any;
+      await plugin.onload();
+      const copyCmd = commands.find(c => c.id === 'copy-last-message');
+      expect(copyCmd).toBeDefined();
+      copyCmd.callback();
+      const chatManagerInstance = (ChatManager as jest.Mock).mock.instances[0];
+      console.log('plugin.chatManager:', plugin.chatManager);
+      console.log('ChatManager mock instances:', (ChatManager as jest.Mock).mock.instances);
+      expect(plugin.chatManager.copyLastMessage).toHaveBeenCalled();
     });
   });
 }); 

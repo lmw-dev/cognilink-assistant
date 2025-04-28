@@ -1,22 +1,5 @@
-// Mock Obsidian's PluginSettingTab and HTMLElement extensions
+// Mock Obsidian's PluginSettingTab and Setting
 jest.mock('obsidian', () => {
-  // Mock HTMLElement extensions
-  HTMLElement.prototype.empty = function() {
-    this.innerHTML = '';
-  };
-  
-  HTMLElement.prototype.createEl = function<K extends keyof HTMLElementTagNameMap>(
-    tag: K,
-    attrs?: { text?: string }
-  ): HTMLElementTagNameMap[K] {
-    const el = document.createElement(tag);
-    if (attrs?.text) {
-      el.textContent = attrs.text;
-    }
-    this.appendChild(el);
-    return el;
-  };
-
   class Setting {
     settingEl: HTMLElement;
     
@@ -112,6 +95,7 @@ jest.mock('obsidian', () => {
           slider.value = value.toString();
           return api;
         },
+        setDynamicTooltip: jest.fn().mockReturnThis(),
         onChange(callback: (value: number) => void) {
           slider.addEventListener('change', (e) => {
             callback(parseFloat((e.target as HTMLInputElement).value));
@@ -171,7 +155,6 @@ jest.mock('obsidian', () => {
       return this;
     }
   }
-
   return {
     App: jest.fn(),
     PluginSettingTab: class {
@@ -191,11 +174,39 @@ import { SettingsTab } from '../SettingsTab';
 import CogniLinkPlugin from '../../main';
 import { DEFAULT_SETTINGS } from '../../types/settings';
 
+// 保存原始方法
+const originalCreateEl = HTMLElement.prototype.createEl;
+const originalEmpty = HTMLElement.prototype.empty;
+
 describe('SettingsTab', () => {
   let settingsTab: SettingsTab;
   let mockApp: App;
   let mockPlugin: CogniLinkPlugin;
   let mockContainerEl: HTMLElement;
+
+  beforeAll(() => {
+    // Mock HTMLElement extensions
+    HTMLElement.prototype.empty = function() {
+      this.innerHTML = '';
+    };
+    HTMLElement.prototype.createEl = function<K extends keyof HTMLElementTagNameMap>(
+      tag: K,
+      attrs?: { text?: string }
+    ): HTMLElementTagNameMap[K] {
+      const el = document.createElement(tag);
+      if (attrs?.text) {
+        el.textContent = attrs.text;
+      }
+      this.appendChild(el);
+      return el;
+    };
+  });
+
+  afterAll(() => {
+    HTMLElement.prototype.createEl = originalCreateEl;
+    HTMLElement.prototype.empty = originalEmpty;
+    jest.restoreAllMocks();
+  });
 
   beforeEach(() => {
     // Mock app
@@ -213,6 +224,7 @@ describe('SettingsTab', () => {
         updateUISettings: jest.fn().mockResolvedValue(undefined),
         saveSettings: jest.fn().mockResolvedValue(undefined),
       },
+      saveSettings: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     // Create container element
@@ -232,9 +244,9 @@ describe('SettingsTab', () => {
     });
 
     it('should render settings title', () => {
-      const title = mockContainerEl.querySelector('h2');
+      const title = mockContainerEl.querySelector('h3');
       expect(title).toBeTruthy();
-      expect(title?.textContent).toBe('CogniLink 设置');
+      expect(title?.textContent).toBe('UI Settings');
     });
 
     it('should render AI provider setting', () => {
@@ -242,10 +254,10 @@ describe('SettingsTab', () => {
       expect(setting).toBeTruthy();
       
       const name = setting?.querySelector('.setting-item-name');
-      expect(name?.textContent).toBe('AI 提供商');
+      expect(name?.textContent).toBe('AI Provider');
       
       const desc = setting?.querySelector('.setting-item-description');
-      expect(desc?.textContent).toBe('选择要使用的 AI 服务提供商');
+      expect(desc?.textContent).toBe('选择 AI 服务提供商');
       
       const dropdown = setting?.querySelector('select');
       expect(dropdown).toBeTruthy();
@@ -256,15 +268,15 @@ describe('SettingsTab', () => {
       
       const settings = mockContainerEl.querySelectorAll('.setting-item');
       const apiKeySetting = Array.from(settings).find(setting => 
-        setting.querySelector('.setting-item-name')?.textContent === 'OpenAI API 密钥'
+        setting.querySelector('.setting-item-name')?.textContent === 'Anthropic API Key'
       );
       expect(apiKeySetting).toBeTruthy();
       
       const name = apiKeySetting?.querySelector('.setting-item-name');
-      expect(name?.textContent).toBe('OpenAI API 密钥');
+      expect(name?.textContent).toBe('Anthropic API Key');
       
       const desc = apiKeySetting?.querySelector('.setting-item-description');
-      expect(desc?.textContent).toBe('输入 OpenAI 服务的 API 密钥');
+      expect(desc?.textContent).toBe('输入你的 Anthropic API Key');
     });
   });
 
@@ -281,9 +293,11 @@ describe('SettingsTab', () => {
       dropdown.value = 'anthropic';
       dropdown.dispatchEvent(new Event('change'));
 
-      expect(mockPlugin.settingsManager.updateAISettings).toHaveBeenCalledWith({
-        provider: 'anthropic',
-      });
+      // 等待异步事件
+      await Promise.resolve();
+
+      expect(mockPlugin.saveSettings).toHaveBeenCalled();
+      expect(mockPlugin.settings.ai.provider).toBe('anthropic');
     });
 
     it('should save settings when API key changes', async () => {
@@ -291,7 +305,7 @@ describe('SettingsTab', () => {
       
       const settings = mockContainerEl.querySelectorAll('.setting-item');
       const apiKeySetting = Array.from(settings).find(setting => 
-        setting.querySelector('.setting-item-name')?.textContent === 'OpenAI API 密钥'
+        setting.querySelector('.setting-item-name')?.textContent === 'Anthropic API Key'
       );
       const input = apiKeySetting?.querySelector('input[type="text"]') as HTMLInputElement;
       expect(input).toBeTruthy();
@@ -300,9 +314,11 @@ describe('SettingsTab', () => {
       input.value = newValue;
       input.dispatchEvent(new Event('change'));
 
-      expect(mockPlugin.settingsManager.updateAISettings).toHaveBeenCalledWith({
-        openAIApiKey: newValue,
-      });
+      // 等待异步事件
+      await Promise.resolve();
+
+      expect(mockPlugin.saveSettings).toHaveBeenCalled();
+      expect(mockPlugin.settings.ai.anthropicApiKey).toBe(newValue);
     });
   });
 }); 

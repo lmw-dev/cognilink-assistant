@@ -16,6 +16,12 @@ export class SettingsTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
+    // 健壮性校验，防止 settings 为空时报错
+    if (!this.settings || !this.settings.ai || !this.settings.ui) {
+      containerEl.createEl('div', { text: '设置加载失败，请重启插件。' });
+      return;
+    }
+
     // AI Provider Settings
     new Setting(containerEl)
       .setName('AI Provider')

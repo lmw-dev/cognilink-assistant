@@ -1,5 +1,59 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# Obsidian 插件开发规则
+
+## API 使用规范
+1. 只使用 Obsidian 官方提供的 API
+   - 必须通过 `import { xxx } from 'obsidian'` 方式导入
+   - 禁止使用原生浏览器 API（如 window.fetch）
+   - 必须使用 Obsidian 提供的请求方法
+
+2. 浏览器环境限制
+   - 插件运行在 Electron 环境中，不是标准浏览器环境
+   - 禁止使用浏览器特有的 API（如 window.localStorage）
+   - 使用 Obsidian 提供的数据持久化方案
+
+3. 第三方库集成
+   - 优先使用 Obsidian 推荐的库和工具
+   - 第三方库必须经过安全性评估
+   - 避免使用依赖浏览器环境的库
+   - 所有网络请求必须通过 Obsidian 的请求 API 封装
+
+4. 错误处理
+   - 所有 API 调用必须有适当的错误处理
+   - 使用 Obsidian 的通知系统显示错误
+   - 在开发模式下记录详细日志
+
+## 开发环境设置
+1. 开发工具配置
+   - 启用 TypeScript 严格模式
+   - 配置正确的 tsconfig.json
+   - 使用 Obsidian 推荐的 ESLint 规则
+
+2. 调试配置
+   - 使用 Obsidian 开发者工具进行调试
+   - 设置合适的日志级别
+   - 使用统一的日志格式
+
+## 测试环境
+1. 测试目录配置
+   - 指定固定的测试 vault 路径
+   - 配置标准的测试数据集
+
+2. 插件安装路径
+   - 开发环境：`~/Documents/CogniLink-Test/.obsidian/plugins/cognilink-assistant/`
+   - 确保目录权限正确
+
+## 构建发布
+1. 构建流程
+   - 使用 esbuild 进行打包
+   - 确保正确处理外部依赖
+   - 验证构建产物的完整性
+
+2. 发布检查
+   - 确保 manifest.json 版本号正确
+   - 验证所有必需文件都已包含
+   - 检查文件权限
