@@ -28,6 +28,7 @@ export class SettingsTab extends PluginSettingTab {
       .setDesc('选择 AI 服务提供商')
       .addDropdown(dropdown => dropdown
         .addOption('anthropic', 'Anthropic')
+        .addOption('openai', 'OpenAI')
         .addOption('local', 'Local')
         .setValue(this.settings.ai.provider)
         .onChange(async (value: AIProvider) => {
@@ -45,6 +46,10 @@ export class SettingsTab extends PluginSettingTab {
           dropdown
             .addOption('claude-2', 'Claude 2')
             .addOption('claude-instant', 'Claude Instant');
+        } else if (this.settings.ai.provider === 'openai') {
+          dropdown
+            .addOption('gpt-3.5-turbo', 'GPT-3.5 Turbo')
+            .addOption('gpt-4', 'GPT-4');
         }
         return dropdown
           .setValue(this.settings.ai.model)
@@ -64,6 +69,31 @@ export class SettingsTab extends PluginSettingTab {
           .setValue(this.settings.ai.anthropicApiKey)
           .onChange(async (value) => {
             this.settings.ai.anthropicApiKey = value;
+            await this.plugin.saveSettings();
+          }));
+    }
+
+    // OpenAI API Key
+    if (this.settings.ai.provider === 'openai') {
+      new Setting(containerEl)
+        .setName('OpenAI API Key')
+        .setDesc('输入你的 OpenAI API Key')
+        .addText(text => text
+          .setPlaceholder('sk-...')
+          .setValue(this.settings.ai.openAIApiKey || '')
+          .onChange(async (value) => {
+            this.settings.ai.openAIApiKey = value;
+            await this.plugin.saveSettings();
+          }));
+      // OpenAI Endpoint
+      new Setting(containerEl)
+        .setName('OpenAI Endpoint')
+        .setDesc('自定义 OpenAI API Endpoint，通常保持默认即可')
+        .addText(text => text
+          .setPlaceholder('https://api.openai.com/v1')
+          .setValue(this.settings.ai.openAIEndpoint || 'https://api.openai.com/v1')
+          .onChange(async (value) => {
+            this.settings.ai.openAIEndpoint = value;
             await this.plugin.saveSettings();
           }));
     }

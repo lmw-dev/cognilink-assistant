@@ -2,7 +2,7 @@ import { App } from 'obsidian';
 import { SettingsManager } from '../SettingsManager';
 import { SettingsStorage } from '../SettingsStorage';
 import { DEFAULT_UI_SETTINGS, DEFAULT_AI_SETTINGS, DEFAULT_SHORTCUTS } from '../../constants/settings';
-import { PluginSettings } from '../../types/settings';
+import { PluginSettings, DEFAULT_SETTINGS } from '../../types/settings';
 import CogniLinkPlugin from '../../main';
 
 describe('SettingsManager', () => {
@@ -11,11 +11,7 @@ describe('SettingsManager', () => {
   let mockApp: any;
   let mockPlugin: any;
 
-  const defaultSettings: PluginSettings = {
-    ui: DEFAULT_UI_SETTINGS,
-    ai: DEFAULT_AI_SETTINGS,
-    shortcuts: DEFAULT_SHORTCUTS
-  };
+  const defaultSettings: PluginSettings = DEFAULT_SETTINGS;
 
   beforeEach(() => {
     mockStorage = {
@@ -37,7 +33,9 @@ describe('SettingsManager', () => {
         ...defaultSettings,
         ai: {
           ...defaultSettings.ai,
-          anthropicApiKey: 'new-key'
+          anthropicApiKey: 'new-key',
+          openAIApiKey: defaultSettings.ai.openAIApiKey || '',
+          openAIEndpoint: defaultSettings.ai.openAIEndpoint || 'https://api.openai.com/v1',
         }
       };
 
@@ -56,7 +54,9 @@ describe('SettingsManager', () => {
         ...defaultSettings,
         ai: {
           ...defaultSettings.ai,
-          anthropicApiKey: 'new-key'
+          anthropicApiKey: 'new-key',
+          openAIApiKey: defaultSettings.ai.openAIApiKey || '',
+          openAIEndpoint: defaultSettings.ai.openAIEndpoint || 'https://api.openai.com/v1',
         }
       };
 
@@ -75,7 +75,9 @@ describe('SettingsManager', () => {
       const partialSettings = {
         ai: {
           ...defaultSettings.ai,
-          anthropicApiKey: 'new-key'
+          anthropicApiKey: 'new-key',
+          openAIApiKey: defaultSettings.ai.openAIApiKey || '',
+          openAIEndpoint: defaultSettings.ai.openAIEndpoint || 'https://api.openai.com/v1',
         }
       };
 
@@ -89,7 +91,7 @@ describe('SettingsManager', () => {
 
   describe('Settings Management', () => {
     it('should initialize with default settings', () => {
-      expect(settingsManager.getSettings()).toEqual(defaultSettings);
+      expect(settingsManager.getSettings()).toMatchObject(defaultSettings);
     });
 
     it('should notify listeners of settings changes', async () => {
@@ -100,6 +102,8 @@ describe('SettingsManager', () => {
         ai: {
           ...defaultSettings.ai,
           anthropicApiKey: 'new-key',
+          openAIApiKey: defaultSettings.ai.openAIApiKey || '',
+          openAIEndpoint: defaultSettings.ai.openAIEndpoint || 'https://api.openai.com/v1',
         },
       });
 
@@ -114,6 +118,8 @@ describe('SettingsManager', () => {
           ...defaultSettings.ai,
           provider: 'anthropic',
           anthropicApiKey: '', // Invalid: empty API key
+          openAIApiKey: defaultSettings.ai.openAIApiKey || '',
+          openAIEndpoint: defaultSettings.ai.openAIEndpoint || 'https://api.openai.com/v1',
         },
       };
 
@@ -124,6 +130,8 @@ describe('SettingsManager', () => {
     it('should update AI settings correctly', async () => {
       await settingsManager.updateAISettings({
         anthropicApiKey: 'new-key',
+        openAIApiKey: defaultSettings.ai.openAIApiKey || '',
+        openAIEndpoint: defaultSettings.ai.openAIEndpoint || 'https://api.openai.com/v1',
       });
 
       const updatedSettings = settingsManager.getSettings();

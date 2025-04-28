@@ -24473,7 +24473,7 @@ __export(main_exports, {
   default: () => CogniLinkPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian6 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 
 // src/types/settings.ts
 var DEFAULT_SETTINGS = {
@@ -24489,6 +24489,8 @@ var DEFAULT_SETTINGS = {
     provider: "anthropic",
     model: "claude-2",
     anthropicApiKey: "",
+    openAIApiKey: "",
+    openAIEndpoint: "https://api.openai.com/v1",
     maxTokens: 2e3,
     temperature: 0.7,
     defaultSystemPrompt: "You are a helpful AI assistant."
@@ -24528,7 +24530,7 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
       containerEl.createEl("div", { text: "\u8BBE\u7F6E\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u91CD\u542F\u63D2\u4EF6\u3002" });
       return;
     }
-    new import_obsidian.Setting(containerEl).setName("AI Provider").setDesc("\u9009\u62E9 AI \u670D\u52A1\u63D0\u4F9B\u5546").addDropdown((dropdown) => dropdown.addOption("anthropic", "Anthropic").addOption("local", "Local").setValue(this.settings.ai.provider).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("AI Provider").setDesc("\u9009\u62E9 AI \u670D\u52A1\u63D0\u4F9B\u5546").addDropdown((dropdown) => dropdown.addOption("anthropic", "Anthropic").addOption("openai", "OpenAI").addOption("local", "Local").setValue(this.settings.ai.provider).onChange(async (value) => {
       this.settings.ai.provider = value;
       await this.plugin.saveSettings();
       this.display();
@@ -24536,6 +24538,8 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("AI Model").setDesc("\u9009\u62E9 AI \u6A21\u578B").addDropdown((dropdown) => {
       if (this.settings.ai.provider === "anthropic") {
         dropdown.addOption("claude-2", "Claude 2").addOption("claude-instant", "Claude Instant");
+      } else if (this.settings.ai.provider === "openai") {
+        dropdown.addOption("gpt-3.5-turbo", "GPT-3.5 Turbo").addOption("gpt-4", "GPT-4");
       }
       return dropdown.setValue(this.settings.ai.model).onChange(async (value) => {
         this.settings.ai.model = value;
@@ -24545,6 +24549,16 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
     if (this.settings.ai.provider === "anthropic") {
       new import_obsidian.Setting(containerEl).setName("Anthropic API Key").setDesc("\u8F93\u5165\u4F60\u7684 Anthropic API Key").addText((text) => text.setPlaceholder("sk-ant-...").setValue(this.settings.ai.anthropicApiKey).onChange(async (value) => {
         this.settings.ai.anthropicApiKey = value;
+        await this.plugin.saveSettings();
+      }));
+    }
+    if (this.settings.ai.provider === "openai") {
+      new import_obsidian.Setting(containerEl).setName("OpenAI API Key").setDesc("\u8F93\u5165\u4F60\u7684 OpenAI API Key").addText((text) => text.setPlaceholder("sk-...").setValue(this.settings.ai.openAIApiKey || "").onChange(async (value) => {
+        this.settings.ai.openAIApiKey = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(containerEl).setName("OpenAI Endpoint").setDesc("\u81EA\u5B9A\u4E49 OpenAI API Endpoint\uFF0C\u901A\u5E38\u4FDD\u6301\u9ED8\u8BA4\u5373\u53EF").addText((text) => text.setPlaceholder("https://api.openai.com/v1").setValue(this.settings.ai.openAIEndpoint || "https://api.openai.com/v1").onChange(async (value) => {
+        this.settings.ai.openAIEndpoint = value;
         await this.plugin.saveSettings();
       }));
     }
@@ -24624,7 +24638,10 @@ var SettingsManager = class extends import_events.EventEmitter {
     this.app = app;
     this.plugin = plugin;
     this.storage = storage;
-    this.settings = DEFAULT_SETTINGS;
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ai: { ...DEFAULT_SETTINGS.ai, ...DEFAULT_SETTINGS.ai || {} }
+    };
   }
   /**
    * 获取当前设置
@@ -24641,14 +24658,18 @@ var SettingsManager = class extends import_events.EventEmitter {
       const savedSettings = await this.storage.loadSettings();
       this.settings = {
         ...DEFAULT_SETTINGS,
-        ...savedSettings
+        ...savedSettings,
+        ai: { ...DEFAULT_SETTINGS.ai, ...(savedSettings == null ? void 0 : savedSettings.ai) || {} }
       };
       console.log("Settings loaded:", this.settings);
       this.plugin.settings = this.settings;
       this.emit("settingsChanged", this.settings);
     } catch (error) {
       console.error("Error loading settings:", error);
-      this.settings = DEFAULT_SETTINGS;
+      this.settings = {
+        ...DEFAULT_SETTINGS,
+        ai: { ...DEFAULT_SETTINGS.ai }
+      };
     }
   }
   /**
@@ -24674,7 +24695,8 @@ var SettingsManager = class extends import_events.EventEmitter {
     console.log("Updating settings:", settings);
     this.settings = {
       ...this.settings,
-      ...settings
+      ...settings,
+      ai: settings.ai ? { ...DEFAULT_SETTINGS.ai, ...this.settings.ai, ...settings.ai } : this.settings.ai
     };
     this.plugin.settings = this.settings;
     await this.saveSettings();
@@ -24685,6 +24707,7 @@ var SettingsManager = class extends import_events.EventEmitter {
    */
   async updateAISettings(aiSettings) {
     const updatedAISettings = {
+      ...DEFAULT_SETTINGS.ai,
       ...this.settings.ai,
       ...aiSettings
     };
@@ -25406,7 +25429,7 @@ function cosineDistance(a, b) {
 }
 
 // src/services/AIService.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/utils/logger.ts
 var DEFAULT_CONFIG = {
@@ -25457,6 +25480,173 @@ Stack: ${error.stack}` : message;
   }
 };
 
+// src/services/AnthropicProvider.ts
+var import_obsidian5 = require("obsidian");
+var AnthropicProvider = class {
+  constructor(options) {
+    this.options = options;
+  }
+  async sendMessage(message) {
+    var _a, _b;
+    const { apiKey, model, maxTokens, temperature, systemPrompt } = this.options;
+    const url = "https://api.anthropic.com/v1/messages";
+    const headers = {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
+    };
+    const body = {
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt || "",
+      messages: [
+        { role: "user", content: message.content }
+      ]
+    };
+    try {
+      const response = await (0, import_obsidian5.requestUrl)({
+        url,
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        throw: false
+      });
+      if (response.status !== 200) {
+        throw new Error(`Anthropic API error: ${response.status} ${response.text}`);
+      }
+      const data = response.json;
+      const content = ((_b = (_a = data.content) == null ? void 0 : _a[0]) == null ? void 0 : _b.text) || "No response from Anthropic.";
+      return {
+        id: Date.now().toString(),
+        role: "assistant",
+        content,
+        timestamp: Date.now()
+      };
+    } catch (err) {
+      return {
+        id: Date.now().toString(),
+        role: "error",
+        content: `Anthropic API \u8C03\u7528\u5931\u8D25: ${err.message || err}`,
+        timestamp: Date.now()
+      };
+    }
+  }
+  async generateEmbeddings(text) {
+    return Array(1536).fill(0).map(() => Math.random());
+  }
+  async testConnection() {
+    return true;
+  }
+};
+
+// src/services/LocalProvider.ts
+var LocalProvider = class {
+  async sendMessage(message) {
+    return {
+      id: Date.now().toString(),
+      role: "assistant",
+      content: "LocalProvider mock response",
+      timestamp: Date.now()
+    };
+  }
+  async generateEmbeddings(text) {
+    return Array(1536).fill(0).map(() => Math.random());
+  }
+  async testConnection() {
+    return true;
+  }
+};
+
+// src/services/OpenAIProvider.ts
+var import_obsidian6 = require("obsidian");
+var OpenAIProvider = class {
+  constructor(options) {
+    this.options = options;
+  }
+  async sendMessage(message) {
+    var _a, _b, _c;
+    const { apiKey, endpoint, model, maxTokens, temperature, systemPrompt } = this.options;
+    const url = `${endpoint}/chat/completions`;
+    const headers = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    };
+    const body = {
+      model,
+      messages: [
+        systemPrompt ? { role: "system", content: systemPrompt } : null,
+        { role: "user", content: message.content }
+      ].filter(Boolean),
+      max_tokens: maxTokens,
+      temperature
+    };
+    try {
+      const response = await (0, import_obsidian6.requestUrl)({
+        url,
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        throw: false
+      });
+      if (response.status !== 200) {
+        throw new Error(`OpenAI API error: ${response.status} ${response.text}`);
+      }
+      const data = response.json;
+      const content = ((_c = (_b = (_a = data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "No response from OpenAI.";
+      return {
+        id: Date.now().toString(),
+        role: "assistant",
+        content,
+        timestamp: Date.now()
+      };
+    } catch (err) {
+      return {
+        id: Date.now().toString(),
+        role: "error",
+        content: `OpenAI API \u8C03\u7528\u5931\u8D25: ${err.message || err}`,
+        timestamp: Date.now()
+      };
+    }
+  }
+  async generateEmbeddings(text) {
+    var _a, _b;
+    const { apiKey, endpoint } = this.options;
+    const url = `${endpoint}/embeddings`;
+    const headers = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    };
+    const body = {
+      model: "text-embedding-ada-002",
+      input: text
+    };
+    try {
+      const response = await (0, import_obsidian6.requestUrl)({
+        url,
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        throw: false
+      });
+      if (response.status !== 200) {
+        throw new Error(`OpenAI Embedding API error: ${response.status} ${response.text}`);
+      }
+      const data = response.json;
+      const embedding = (_b = (_a = data.data) == null ? void 0 : _a[0]) == null ? void 0 : _b.embedding;
+      if (Array.isArray(embedding)) {
+        return embedding;
+      }
+      throw new Error("OpenAI Embedding API: No embedding returned");
+    } catch (err) {
+      return [];
+    }
+  }
+  async testConnection() {
+    return true;
+  }
+};
+
 // src/services/AIService.ts
 var ConfigurationError = class extends Error {
   constructor(message) {
@@ -25470,16 +25660,50 @@ var AIService = class {
     this.plugin = plugin;
     this.settings = plugin.settings;
     this.logger = new Logger("AIService");
+    this.provider = this.createProvider();
     console.log("[AIService] Initializing with settings:", {
       provider: this.settings.ai.provider,
       model: this.settings.ai.model,
       hasAnthropicKey: !!this.settings.ai.anthropicApiKey
     });
     console.log("[AIService] Loaded modules:", {
-      obsidian: !!import_obsidian5.Notice,
+      obsidian: !!import_obsidian7.Notice,
       settings: !!this.settings,
       logger: !!this.logger
     });
+  }
+  createProvider() {
+    const { provider, model, anthropicApiKey, openAIApiKey, openAIEndpoint, maxTokens, temperature, defaultSystemPrompt } = this.settings.ai;
+    if (provider === "anthropic") {
+      if (!anthropicApiKey) {
+        throw new ConfigurationError("Anthropic API key is missing");
+      }
+      const options = {
+        apiKey: anthropicApiKey,
+        model,
+        maxTokens,
+        temperature,
+        systemPrompt: defaultSystemPrompt
+      };
+      return new AnthropicProvider(options);
+    } else if (provider === "openai") {
+      if (!openAIApiKey) {
+        throw new ConfigurationError("OpenAI API key is missing");
+      }
+      const options = {
+        apiKey: openAIApiKey,
+        endpoint: openAIEndpoint || "https://api.openai.com/v1",
+        model,
+        maxTokens,
+        temperature,
+        systemPrompt: defaultSystemPrompt
+      };
+      return new OpenAIProvider(options);
+    } else if (provider === "local") {
+      return new LocalProvider();
+    } else {
+      throw new Error("Unsupported AI provider");
+    }
   }
   async sendMessage(message) {
     console.log("[AIService] sendMessage called with:", {
@@ -25491,26 +25715,11 @@ var AIService = class {
       provider: this.settings.ai.provider,
       model: this.settings.ai.model
     });
-    if (this.settings.ai.provider === "anthropic" && !this.settings.ai.anthropicApiKey) {
-      throw new ConfigurationError("Anthropic API key is missing");
-    }
-    if (this.settings.ai.provider !== "anthropic" && this.settings.ai.provider !== "local") {
-      throw new Error("Unsupported AI provider");
-    }
-    const response = {
-      id: Date.now().toString(),
-      role: "assistant",
-      content: "\u8FD9\u662F\u4E00\u4E2A\u6A21\u62DF\u54CD\u5E94\u3002AI \u529F\u80FD\u6B63\u5728\u5F00\u53D1\u4E2D\u3002",
-      timestamp: Date.now()
-    };
-    console.log("[AIService] Returning mock response:", response);
-    return response;
+    return this.provider.sendMessage(message);
   }
   async generateEmbeddings(text) {
     console.log("[AIService] generateEmbeddings called with text length:", text.length);
-    const embeddings = Array(1536).fill(0).map(() => Math.random());
-    console.log("[AIService] Returning mock embeddings of length:", embeddings.length);
-    return embeddings;
+    return this.provider.generateEmbeddings(text);
   }
 };
 
@@ -25616,7 +25825,7 @@ var CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fil
   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
 </svg>`;
 var VIEW_TYPE_CHAT = "cognilink-chat";
-var CogniLinkPlugin = class extends import_obsidian6.Plugin {
+var CogniLinkPlugin = class extends import_obsidian8.Plugin {
   async onload() {
     try {
       console.log("CogniLink plugin loading...");
@@ -25655,7 +25864,7 @@ var CogniLinkPlugin = class extends import_obsidian6.Plugin {
       } catch (error) {
         console.error("Failed to initialize AccessibilityManager:", error);
       }
-      (0, import_obsidian6.addIcon)("cognilink-chat", CHAT_ICON);
+      (0, import_obsidian8.addIcon)("cognilink-chat", CHAT_ICON);
       this.registerView(
         VIEW_TYPE_CHAT,
         (leaf) => {
@@ -25682,7 +25891,7 @@ var CogniLinkPlugin = class extends import_obsidian6.Plugin {
         callback: async () => {
           const service = new NoteMetaService(this.app);
           const notes = await service.getAllNotesMeta();
-          new import_obsidian6.Notice(`\u5171\u89E3\u6790\u5230 ${notes.length} \u4E2A\u7B14\u8BB0`);
+          new import_obsidian8.Notice(`\u5171\u89E3\u6790\u5230 ${notes.length} \u4E2A\u7B14\u8BB0`);
           console.log("NoteMetaService \u6D4B\u8BD5\u7ED3\u679C:", notes);
         }
       });
@@ -25715,7 +25924,7 @@ var CogniLinkPlugin = class extends import_obsidian6.Plugin {
         id: "check-originality",
         name: "\u68C0\u67E5\u539F\u521B\u6027",
         callback: () => {
-          new import_obsidian6.Notice("\u539F\u521B\u6027\u68C0\u6D4B\u529F\u80FD\u5F00\u53D1\u4E2D");
+          new import_obsidian8.Notice("\u539F\u521B\u6027\u68C0\u6D4B\u529F\u80FD\u5F00\u53D1\u4E2D");
         }
       });
       console.log("Plugin commands registered.");
@@ -25725,10 +25934,10 @@ var CogniLinkPlugin = class extends import_obsidian6.Plugin {
         this.initLeaf();
       });
       console.log("CogniLink plugin loaded successfully");
-      new import_obsidian6.Notice("CogniLink \u63D2\u4EF6\u5DF2\u52A0\u8F7D");
+      new import_obsidian8.Notice("CogniLink \u63D2\u4EF6\u5DF2\u52A0\u8F7D");
     } catch (error) {
       console.error("Failed to load CogniLink plugin:", error);
-      new import_obsidian6.Notice("CogniLink \u63D2\u4EF6\u52A0\u8F7D\u5931\u8D25");
+      new import_obsidian8.Notice("CogniLink \u63D2\u4EF6\u52A0\u8F7D\u5931\u8D25");
     }
   }
   async onunload() {
@@ -25739,7 +25948,7 @@ var CogniLinkPlugin = class extends import_obsidian6.Plugin {
     if (this.accessibilityManager) {
       this.accessibilityManager.cleanup();
     }
-    new import_obsidian6.Notice("CogniLink \u63D2\u4EF6\u5DF2\u5378\u8F7D");
+    new import_obsidian8.Notice("CogniLink \u63D2\u4EF6\u5DF2\u5378\u8F7D");
   }
   async activateView() {
     const { workspace } = this.app;

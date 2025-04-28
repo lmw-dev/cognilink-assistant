@@ -1,7 +1,7 @@
 {
   "id": "cognilink-assistant",
   "name": "CogniLink Assistant",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "minAppVersion": "1.0.0",
   "description": "An AI-powered assistant for enhancing your knowledge management in Obsidian",
   "author": "CogniLink Team",

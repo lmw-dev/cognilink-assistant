@@ -1,5 +1,5 @@
-export type AIProvider = 'anthropic' | 'local';
-export type AIModel = 'claude-2' | 'claude-instant';
+export type AIProvider = 'anthropic' | 'local' | 'openai';
+export type AIModel = 'claude-2' | 'claude-instant' | 'gpt-3.5-turbo' | 'gpt-4';
 export type Theme = 'system' | 'light' | 'dark';
 export type FontSize = 'small' | 'medium' | 'large';
 export type MessageSpacing = 'compact' | 'comfortable' | 'spacious';
@@ -29,6 +29,8 @@ export interface AISettings {
   provider: AIProvider;
   model: AIModel;
   anthropicApiKey: string;
+  openAIApiKey?: string;
+  openAIEndpoint?: string;
   maxTokens: number;
   temperature: number;
   defaultSystemPrompt: string;
@@ -55,6 +57,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     provider: 'anthropic',
     model: 'claude-2',
     anthropicApiKey: '',
+    openAIApiKey: '',
+    openAIEndpoint: 'https://api.openai.com/v1',
     maxTokens: 2000,
     temperature: 0.7,
     defaultSystemPrompt: 'You are a helpful AI assistant.'

@@ -1,9 +1,12 @@
 import { Notice } from 'obsidian';
 import CogniLinkPlugin from '../main';
-import { Message, MessageRole } from '../types/message';
-import { PluginSettings } from '../types/settings';
+import { Message } from '../types/message';
 import { Logger } from '../utils/logger';
 import { Settings } from '../types/settings';
+import { AIProvider } from './AIProvider';
+import { AnthropicProvider, AnthropicProviderOptions } from './AnthropicProvider';
+import { LocalProvider } from './LocalProvider';
+import { OpenAIProvider, OpenAIProviderOptions } from './OpenAIProvider';
 
 export class AIServiceError extends Error {
   constructor(message: string) {
@@ -37,12 +40,14 @@ export class AIService {
   private plugin: CogniLinkPlugin;
   private settings: Settings;
   private logger: Logger;
+  private provider: AIProvider;
 
   constructor(plugin: CogniLinkPlugin) {
     console.log('[AIService] Constructor called');
     this.plugin = plugin;
     this.settings = plugin.settings;
     this.logger = new Logger('AIService');
+    this.provider = this.createProvider();
     
     // 详细记录初始化信息
     console.log('[AIService] Initializing with settings:', {
@@ -59,6 +64,40 @@ export class AIService {
     });
   }
 
+  private createProvider(): AIProvider {
+    const { provider, model, anthropicApiKey, openAIApiKey, openAIEndpoint, maxTokens, temperature, defaultSystemPrompt } = this.settings.ai;
+    if (provider === 'anthropic') {
+      if (!anthropicApiKey) {
+        throw new ConfigurationError('Anthropic API key is missing');
+      }
+      const options: AnthropicProviderOptions = {
+        apiKey: anthropicApiKey,
+        model,
+        maxTokens,
+        temperature,
+        systemPrompt: defaultSystemPrompt,
+      };
+      return new AnthropicProvider(options);
+    } else if (provider === 'openai') {
+      if (!openAIApiKey) {
+        throw new ConfigurationError('OpenAI API key is missing');
+      }
+      const options: OpenAIProviderOptions = {
+        apiKey: openAIApiKey,
+        endpoint: openAIEndpoint || 'https://api.openai.com/v1',
+        model,
+        maxTokens,
+        temperature,
+        systemPrompt: defaultSystemPrompt,
+      };
+      return new OpenAIProvider(options);
+    } else if (provider === 'local') {
+      return new LocalProvider();
+    } else {
+      throw new Error('Unsupported AI provider');
+    }
+  }
+
   async sendMessage(message: Message): Promise<Message> {
     console.log('[AIService] sendMessage called with:', {
       messageId: message.id,
@@ -71,32 +110,12 @@ export class AIService {
       model: this.settings.ai.model,
     });
     
-    // 新增异常处理逻辑
-    if (this.settings.ai.provider === 'anthropic' && !this.settings.ai.anthropicApiKey) {
-      throw new ConfigurationError('Anthropic API key is missing');
-    }
-    if (this.settings.ai.provider !== 'anthropic' && this.settings.ai.provider !== 'local') {
-      throw new Error('Unsupported AI provider');
-    }
-    
-    // 临时返回模拟响应
-    const response: Message = {
-      id: Date.now().toString(),
-      role: 'assistant' as MessageRole,
-      content: '这是一个模拟响应。AI 功能正在开发中。',
-      timestamp: Date.now(),
-    };
-    
-    console.log('[AIService] Returning mock response:', response);
-    return response;
+    return this.provider.sendMessage(message);
   }
 
   async generateEmbeddings(text: string): Promise<number[]> {
     console.log('[AIService] generateEmbeddings called with text length:', text.length);
     
-    // 临时返回模拟的嵌入向量
-    const embeddings = Array(1536).fill(0).map(() => Math.random());
-    console.log('[AIService] Returning mock embeddings of length:', embeddings.length);
-    return embeddings;
+    return this.provider.generateEmbeddings(text);
   }
 }

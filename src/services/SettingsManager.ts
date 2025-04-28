@@ -20,7 +20,10 @@ export class SettingsManager extends EventEmitter {
     this.app = app;
     this.plugin = plugin;
     this.storage = storage;
-    this.settings = DEFAULT_SETTINGS;
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ai: { ...DEFAULT_SETTINGS.ai, ...(DEFAULT_SETTINGS.ai || {}) },
+    };
   }
 
   /**
@@ -39,14 +42,18 @@ export class SettingsManager extends EventEmitter {
       const savedSettings = await this.storage.loadSettings();
       this.settings = {
         ...DEFAULT_SETTINGS,
-        ...savedSettings
+        ...savedSettings,
+        ai: { ...DEFAULT_SETTINGS.ai, ...(savedSettings?.ai || {}) },
       };
       console.log('Settings loaded:', this.settings);
       this.plugin.settings = this.settings;
       this.emit('settingsChanged', this.settings);
     } catch (error) {
       console.error('Error loading settings:', error);
-      this.settings = DEFAULT_SETTINGS;
+      this.settings = {
+        ...DEFAULT_SETTINGS,
+        ai: { ...DEFAULT_SETTINGS.ai },
+      };
     }
   }
 
@@ -75,6 +82,9 @@ export class SettingsManager extends EventEmitter {
     this.settings = {
       ...this.settings,
       ...settings,
+      ai: settings.ai
+        ? { ...DEFAULT_SETTINGS.ai, ...this.settings.ai, ...settings.ai }
+        : this.settings.ai,
     };
     this.plugin.settings = this.settings;
     await this.saveSettings();
@@ -86,10 +96,10 @@ export class SettingsManager extends EventEmitter {
    */
   async updateAISettings(aiSettings: Partial<PluginSettings['ai']>): Promise<void> {
     const updatedAISettings = {
+      ...DEFAULT_SETTINGS.ai,
       ...this.settings.ai,
       ...aiSettings,
     };
-    
     await this.updateSettings({
       ai: updatedAISettings,
     });

@@ -148,3 +148,35 @@ For internal support and questions:
 ## License
 
 MIT License - See LICENSE file for details
+
+## Exception Handling & Testing
+
+### Exception Scenarios
+
+- **Missing Anthropic API Key**: If the AI provider is set to `anthropic` and the API key is missing, the plugin will throw a `ConfigurationError` with the message `Anthropic API key is missing`.
+- **Unsupported Provider**: If the AI provider is set to an unsupported value, the plugin will throw an error with the message `Unsupported AI provider`.
+
+### How to Test Exception Handling in Obsidian
+
+1. **Test Missing Anthropic API Key**
+   - Go to the plugin settings in Obsidian.
+   - Set the AI provider to `anthropic`.
+   - Leave the API key field empty or enter an invalid value.
+   - Save settings and trigger an AI action (e.g., send a message).
+   - **Expected:** You should see an error notification or message: `Anthropic API key is missing`. Check the developer console for error logs.
+
+2. **Test Unsupported Provider**
+   - Manually edit the plugin's settings file (e.g., `.obsidian/plugins/<plugin-id>/settings.json`) and set `ai.provider` to an invalid value (e.g., `foobar`).
+   - Reload Obsidian or the plugin.
+   - Trigger an AI action.
+   - **Expected:** You should see an error notification or message: `Unsupported AI provider`. Check the developer console for error logs.
+
+### Unit Testing
+
+- Exception branches are covered by unit tests in `src/services/__tests__/AIService.test.ts` and `SettingsManager.test.ts`.
+- Tests assert that the correct error is thrown for missing API keys and unsupported providers, both synchronously and asynchronously.
+- Run all tests with:
+  ```bash
+  npm test
+  ```
+- For failed tests, check the error message output and ensure your environment matches the documented requirements.
