@@ -3,3 +3,35 @@ description:
 globs:
 alwaysApply: false
 ---
+# UI Components Guide
+
+CogniLink Assistant uses React components for its UI, integrated into Obsidian's interface.
+
+## Main Components
+- [src/components/ChatView.tsx](mdc:src/components/ChatView.tsx)
+  - Obsidian view container
+  - Handles React integration
+  - Manages view lifecycle
+- [src/components/Chat.tsx](mdc:src/components/Chat.tsx)
+  - Main chat interface
+  - Message display and input
+  - Handles message submission
+  - Source display
+
+## Styling
+Global styles are defined in [styles.css](mdc:styles.css):
+- Chat container layout
+- Message bubbles
+- Input area
+- Source citations
+- Timestamps
+
+## Integration with Obsidian
+The main plugin class in [src/main.ts](mdc:src/main.ts) handles:
+- View registration
+- Command registration
+- Settings tab
+- Ribbon icon
+
+## Settings UI
+Settings interface is managed by the CogniLinkSettingTab class in [src/main.ts](mdc:src/main.ts)

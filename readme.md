@@ -28,6 +28,7 @@ cognilink-assistant/
 ├── dist/                   # Compiled output
 ├── tests/                  # Test files
 ├── docs/                   # Documentation
+├── scripts/               # Build and deployment scripts
 ├── esbuild.config.mjs      # ESBuild configuration
 ├── package.json           # Project dependencies and scripts
 ├── tsconfig.json         # TypeScript configuration
@@ -72,6 +73,9 @@ Before you begin, ensure you have the following installed:
 - `npm run lint` - Run ESLint
 - `npm run lint:fix` - Fix ESLint issues
 - `npm run format` - Format code with Prettier
+- `npm run deploy` - Build and deploy to test vault (see below)
+- `npm run clean` - Clean build artifacts
+- `npm run validate` - Run all validations (lint, test, build)
 
 ### Development Mode
 
@@ -90,64 +94,181 @@ Before you begin, ensure you have the following installed:
    ```
 2. The compiled plugin will be available in the `dist` directory
 
-## Testing
+### Deployment and Testing
 
-- Write tests in the `tests` directory
-- Follow the Jest testing framework conventions
-- Run tests with `npm test`
-- Aim for good test coverage of new features
+#### Manual Deployment
 
-## Code Style & Linting
+1. Build the plugin:
+   ```bash
+   npm run build
+   ```
 
-We follow strict coding standards to maintain code quality:
+2. Copy the built files to your Obsidian test vault:
+   ```bash
+   cp dist/main.js manifest.json styles.css ~/Documents/CogniLink-Test/.obsidian/plugins/cognilink-assistant/
+   ```
 
-- Use TypeScript for all new code
-- Follow ESLint rules (see `.eslintrc`)
-- Format code using Prettier
-- Run linting before committing: `npm run lint`
-- Fix linting issues: `npm run lint:fix`
-- Format code: `npm run format`
+3. Reload Obsidian or restart the plugin
 
-## Debugging
+#### Automated Deployment
 
-- Use Chrome DevTools for debugging (available in Obsidian Developer Tools)
-- Enable debug logs in development mode
-- Check console for errors and warnings
+We provide a deployment script (`scripts/deploy.sh`) that automates the build and deployment process:
 
-## Contributing Guidelines
+```bash
+#!/bin/bash
 
-1. Create a new branch for your feature/fix
-2. Write clear, commented code
-3. Include tests for new features
-4. Update documentation as needed
-5. Follow the code style guidelines
-6. Submit a pull request with a clear description
+# Configuration
+TEST_VAULT_PATH="$HOME/Documents/CogniLink-Test"
+PLUGIN_NAME="cognilink-assistant"
+PLUGIN_PATH="$TEST_VAULT_PATH/.obsidian/plugins/$PLUGIN_NAME"
 
-## Common Issues & Solutions
+# Create plugin directory if it doesn't exist
+mkdir -p "$PLUGIN_PATH"
 
-### Development Environment
+# Build the plugin
+echo "Building plugin..."
+npm run build
 
-- If hot-reload isn't working, restart Obsidian
-- Clear the `.cache` directory if build issues occur
-- Check Node.js and npm versions if setup fails
+# Copy files to test vault
+echo "Deploying to test vault..."
+cp dist/main.js "$PLUGIN_PATH/"
+cp manifest.json "$PLUGIN_PATH/"
+cp styles.css "$PLUGIN_PATH/"
 
-### Build Issues
+echo "Deployment complete!"
+```
 
-- Run `npm clean-install` to resolve dependency issues
-- Check for TypeScript errors: `tsc --noEmit`
-- Verify ESBuild configuration in `esbuild.config.mjs`
+To use the automated deployment:
 
-## Contact & Support
+1. Add the script to your project:
+   ```bash
+   mkdir -p scripts
+   touch scripts/deploy.sh
+   chmod +x scripts/deploy.sh
+   ```
 
-For internal support and questions:
+2. Add the script to your `package.json`:
+   ```json
+   {
+     "scripts": {
+       "deploy": "./scripts/deploy.sh"
+     }
+   }
+   ```
 
-- Check the `docs` directory for detailed documentation
-- Contact the development team through internal channels
-- Report bugs through the issue tracker
+3. Run the deployment:
+   ```bash
+   npm run deploy
+   ```
+
+### Testing in Obsidian
+
+#### Setting Up a Test Vault
+
+1. Create a test vault in Obsidian:
+   - Open Obsidian
+   - Click "Create new vault"
+   - Name it "CogniLink-Test"
+   - Choose a location (e.g., `~/Documents/CogniLink-Test`)
+
+2. Enable developer mode:
+   - Open Settings
+   - Go to "About"
+   - Click "Developer mode" to enable it
+
+#### Development Testing
+
+1. Start development mode:
+   ```bash
+   npm run dev
+   ```
+
+2. Deploy to test vault:
+   ```bash
+   npm run deploy
+   ```
+
+3. In Obsidian:
+   - Open the test vault
+   - Go to Settings > Community Plugins
+   - Enable "CogniLink Assistant"
+   - Reload the plugin if needed
+
+#### Production Testing
+
+1. Build and deploy:
+   ```bash
+   npm run build
+   npm run deploy
+   ```
+
+2. Test in Obsidian:
+   - Open the test vault
+   - Verify all features work as expected
+   - Check for any console errors
+
+### Debugging
+
+#### Development Debugging
+
+1. Enable debug logs:
+   - Open Obsidian
+   - Press `Ctrl+Shift+I` (Windows/Linux) or `Cmd+Option+I` (macOS)
+   - Go to Console tab
+   - Filter for "CogniLink" to see plugin logs
+
+2. Common debugging tasks:
+   - Check for build errors in terminal
+   - Verify plugin is loaded in Obsidian
+   - Monitor network requests
+   - Check for JavaScript errors
+
+#### Production Debugging
+
+1. Enable developer tools:
+   - Open Obsidian
+   - Press `Ctrl+Shift+I` (Windows/Linux) or `Cmd+Option+I` (macOS)
+   - Go to Console tab
+
+2. Debug steps:
+   - Check for JavaScript errors
+   - Verify API calls
+   - Monitor performance
+   - Check memory usage
+
+### Common Issues & Solutions
+
+#### Build Issues
+
+1. **Build fails**
+   - Check TypeScript errors: `npm run build`
+   - Verify dependencies: `npm install`
+   - Clean and rebuild: `npm run clean && npm run build`
+
+2. **Plugin not loading**
+   - Verify file permissions
+   - Check manifest.json version
+   - Ensure all required files are present
+
+#### Deployment Issues
+
+1. **Files not copying**
+   - Check test vault path
+   - Verify file permissions
+   - Ensure plugin directory exists
+
+2. **Plugin not appearing**
+   - Check plugin directory structure
+   - Verify manifest.json
+   - Restart Obsidian
+
+## Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
 ## License
 
-MIT License - See LICENSE file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Exception Handling & Testing
 

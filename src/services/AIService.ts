@@ -65,36 +65,48 @@ export class AIService {
   }
 
   private createProvider(): AIProvider {
-    const { provider, model, anthropicApiKey, openAIApiKey, openAIEndpoint, maxTokens, temperature, defaultSystemPrompt } = this.settings.ai;
-    if (provider === 'anthropic') {
-      if (!anthropicApiKey) {
-        throw new ConfigurationError('Anthropic API key is missing');
+    const { provider, model, anthropicApiKey, anthropicEndpoint, openAIApiKey, openAIEndpoint, maxTokens, temperature, defaultSystemPrompt } = this.settings.ai;
+    
+    try {
+      if (provider === 'anthropic') {
+        if (!anthropicApiKey) {
+          console.warn('[AIService] Anthropic API key is missing, falling back to LocalProvider');
+          new Notice('Anthropic API key 未配置，请在设置中添加');
+          return new LocalProvider();
+        }
+        const options: AnthropicProviderOptions = {
+          apiKey: anthropicApiKey,
+          endpoint: anthropicEndpoint || 'https://api.anthropic.com',
+          model,
+          maxTokens,
+          temperature,
+          systemPrompt: defaultSystemPrompt,
+        };
+        return new AnthropicProvider(options);
+      } else if (provider === 'openai') {
+        if (!openAIApiKey) {
+          console.warn('[AIService] OpenAI API key is missing, falling back to LocalProvider');
+          new Notice('OpenAI API key 未配置，请在设置中添加');
+          return new LocalProvider();
+        }
+        const options: OpenAIProviderOptions = {
+          apiKey: openAIApiKey,
+          endpoint: openAIEndpoint || 'https://api.openai.com/v1',
+          model,
+          maxTokens,
+          temperature,
+          systemPrompt: defaultSystemPrompt,
+        };
+        return new OpenAIProvider(options);
+      } else if (provider === 'local') {
+        return new LocalProvider();
+      } else {
+        console.warn(`[AIService] Unsupported provider: ${provider}, falling back to LocalProvider`);
+        return new LocalProvider();
       }
-      const options: AnthropicProviderOptions = {
-        apiKey: anthropicApiKey,
-        model,
-        maxTokens,
-        temperature,
-        systemPrompt: defaultSystemPrompt,
-      };
-      return new AnthropicProvider(options);
-    } else if (provider === 'openai') {
-      if (!openAIApiKey) {
-        throw new ConfigurationError('OpenAI API key is missing');
-      }
-      const options: OpenAIProviderOptions = {
-        apiKey: openAIApiKey,
-        endpoint: openAIEndpoint || 'https://api.openai.com/v1',
-        model,
-        maxTokens,
-        temperature,
-        systemPrompt: defaultSystemPrompt,
-      };
-      return new OpenAIProvider(options);
-    } else if (provider === 'local') {
-      return new LocalProvider();
-    } else {
-      throw new Error('Unsupported AI provider');
+    } catch (error) {
+      console.error('[AIService] Error creating provider:', error);
+      return new LocalProvider(); // 异常情况也回退到本地提供商
     }
   }
 

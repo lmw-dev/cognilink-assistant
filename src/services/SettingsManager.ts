@@ -16,20 +16,27 @@ export class SettingsManager extends EventEmitter {
 
   constructor(app: App, plugin: CogniLinkPlugin, storage: SettingsStorage) {
     super();
-    console.log('Initializing SettingsManager');
+    console.log('[SettingsManager] constructor');
     this.app = app;
     this.plugin = plugin;
     this.storage = storage;
+    
+    // 确保使用完整的默认设置
     this.settings = {
       ...DEFAULT_SETTINGS,
-      ai: { ...DEFAULT_SETTINGS.ai, ...(DEFAULT_SETTINGS.ai || {}) },
+      ui: { ...DEFAULT_SETTINGS.ui },
+      ai: { ...DEFAULT_SETTINGS.ai },
+      shortcuts: { ...DEFAULT_SETTINGS.shortcuts }
     };
+    
+    console.log('[SettingsManager] initial settings:', this.settings);
   }
 
   /**
    * 获取当前设置
    */
   getSettings(): PluginSettings {
+    console.log('[SettingsManager] getSettings:', this.settings);
     return this.settings;
   }
 
@@ -37,23 +44,32 @@ export class SettingsManager extends EventEmitter {
    * 加载设置
    */
   async loadSettings(): Promise<void> {
-    console.log('Loading settings...');
+    console.log('[SettingsManager] loadSettings called');
     try {
       const savedSettings = await this.storage.loadSettings();
+      console.log('[SettingsManager] loaded from storage:', savedSettings);
+      
       this.settings = {
         ...DEFAULT_SETTINGS,
         ...savedSettings,
+        ui: { ...DEFAULT_SETTINGS.ui, ...(savedSettings?.ui || {}) },
         ai: { ...DEFAULT_SETTINGS.ai, ...(savedSettings?.ai || {}) },
+        shortcuts: { ...DEFAULT_SETTINGS.shortcuts, ...(savedSettings?.shortcuts || {}) }
       };
-      console.log('Settings loaded:', this.settings);
+      
+      console.log('[SettingsManager] merged settings:', this.settings);
       this.plugin.settings = this.settings;
       this.emit('settingsChanged', this.settings);
     } catch (error) {
-      console.error('Error loading settings:', error);
+      console.error('[SettingsManager] Error loading settings:', error);
+      // 确保在错误情况下也使用完整的默认设置
       this.settings = {
         ...DEFAULT_SETTINGS,
+        ui: { ...DEFAULT_SETTINGS.ui },
         ai: { ...DEFAULT_SETTINGS.ai },
+        shortcuts: { ...DEFAULT_SETTINGS.shortcuts }
       };
+      this.plugin.settings = this.settings;
     }
   }
 
@@ -61,14 +77,14 @@ export class SettingsManager extends EventEmitter {
    * 保存设置
    */
   async saveSettings(): Promise<void> {
-    console.log('Saving settings:', this.settings);
+    console.log('[SettingsManager] saveSettings called with:', this.settings);
     try {
       await this.storage.saveSettings(this.settings);
-      console.log('Settings saved successfully');
+      console.log('[SettingsManager] Settings saved');
       this.plugin.settings = this.settings;
       this.emit('settingsChanged', this.settings);
     } catch (error) {
-      console.error('Error saving settings:', error);
+      console.error('[SettingsManager] Error saving settings:', error);
       throw error;
     }
   }
@@ -78,7 +94,7 @@ export class SettingsManager extends EventEmitter {
    * @param settings - 要更新的设置
    */
   async updateSettings(settings: Partial<PluginSettings>): Promise<void> {
-    console.log('Updating settings:', settings);
+    console.log('[SettingsManager] updateSettings called with:', settings);
     this.settings = {
       ...this.settings,
       ...settings,
@@ -86,6 +102,7 @@ export class SettingsManager extends EventEmitter {
         ? { ...DEFAULT_SETTINGS.ai, ...this.settings.ai, ...settings.ai }
         : this.settings.ai,
     };
+    console.log('[SettingsManager] updated settings:', this.settings);
     this.plugin.settings = this.settings;
     await this.saveSettings();
   }

@@ -1,0 +1,20 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: "项目 TypeScript 编码的通用标准和最佳实践。"
+alwaysApply: true
+---
+
+
+# TypeScript 编码标准
+
+- 在 `tsconfig.json` 中启用并严格遵守 `strict: true` 配置。
+- 所有新的前端和后端代码均应使用 TypeScript 编写。
+- 定义对象形状时，优先使用接口 (interfaces) 而非类型别名 (type aliases)，除非需要使用联合类型或交叉类型。
+- 尽可能避免使用 `any` 和 `unknown` 类型。为所有变量、参数和返回值提供明确、具体的类型定义。
+- 为了更好的代码提示、重构支持和潜在的 tree-shaking 优化，一致使用命名导出 (named exports) 而非默认导出 (default exports) 。
+- 所有函数和方法都必须有显式的返回类型声明。
+- 避免使用枚举 (enums)，推荐使用常量对象 (const objects)替代。

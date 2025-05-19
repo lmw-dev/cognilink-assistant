@@ -29,54 +29,35 @@ export default class CogniLinkPlugin extends Plugin {
 
   async onload() {
     try {
-      console.log('CogniLink plugin loading...');
-      
-      // Initialize settings first
+      console.log('[main] onload called');
+      // 初始化 SettingsStorage
       const storage = new SettingsStorage(this);
+      console.log('[main] SettingsStorage created:', storage);
+      // 初始化 SettingsManager
       this.settingsManager = new SettingsManager(this.app, this, storage);
+      console.log('[main] SettingsManager created:', this.settingsManager);
+      // 加载设置
       await this.settingsManager.loadSettings();
       this.settings = this.settingsManager.getSettings();
-      console.log('Settings loaded:', this.settings);
-
-      // Initialize services one by one with error handling
-      try {
-        this.embeddingService = new EmbeddingService(this);
-        console.log('EmbeddingService initialized');
-      } catch (error) {
-        console.error('Failed to initialize EmbeddingService:', error);
-      }
-
-      try {
-        this.aiService = new AIService(this);
-        console.log('AIService initialized');
-      } catch (error) {
-        console.error('Failed to initialize AIService:', error);
-      }
-
-      try {
-        this.chatManager = new ChatManager(this);
-        console.log('ChatManager initialized');
-      } catch (error) {
-        console.error('Failed to initialize ChatManager:', error);
-      }
-
-      try {
-        this.keyboardManager = new KeyboardManager(this.app, this);
-        console.log('KeyboardManager initialized');
-      } catch (error) {
-        console.error('Failed to initialize KeyboardManager:', error);
-      }
-
-      try {
-        this.accessibilityManager = new AccessibilityManager(this.app, this);
-        console.log('AccessibilityManager initialized');
-      } catch (error) {
-        console.error('Failed to initialize AccessibilityManager:', error);
-      }
-
-      // Register views and commands
+      console.log('[main] settings loaded:', this.settings);
+      // 初始化服务
+      console.log('[main] initializing EmbeddingService');
+      this.embeddingService = new EmbeddingService(this);
+      console.log('[main] EmbeddingService initialized');
+      console.log('[main] initializing AIService');
+      this.aiService = new AIService(this);
+      console.log('[main] AIService initialized');
+      console.log('[main] initializing ChatManager');
+      this.chatManager = new ChatManager(this);
+      console.log('[main] ChatManager initialized');
+      console.log('[main] initializing KeyboardManager');
+      this.keyboardManager = new KeyboardManager(this.app, this);
+      console.log('[main] KeyboardManager initialized');
+      console.log('[main] initializing AccessibilityManager');
+      this.accessibilityManager = new AccessibilityManager(this.app, this);
+      console.log('[main] AccessibilityManager initialized');
+      // 注册视图和命令
       addIcon('cognilink-chat', CHAT_ICON);
-      
       this.registerView(
         VIEW_TYPE_CHAT,
         (leaf) => {
@@ -84,12 +65,10 @@ export default class CogniLinkPlugin extends Plugin {
           return new ChatView(leaf, this);
         }
       );
-
       this.addRibbonIcon('cognilink-chat', 'CogniLink Assistant', async () => {
         console.log('Ribbon icon clicked');
         await this.activateView();
       });
-
       this.addCommand({
         id: 'toggle-cognilink-chat',
         name: 'Toggle CogniLink Chat',
@@ -145,18 +124,20 @@ export default class CogniLinkPlugin extends Plugin {
 
       // 注册 SettingsTab 必须在 settings 加载后
       this.addSettingTab(new SettingsTab(this.app, this));
-
+      console.log('[main] SettingsTab added');
+      // 自动保存一次设置，确保 data.json 自动生成
+      await this.settingsManager.saveSettings();
       // Initialize the view
       this.app.workspace.onLayoutReady(() => {
         console.log('Layout ready, initializing leaf');
         this.initLeaf();
       });
-
       console.log('CogniLink plugin loaded successfully');
       new Notice('CogniLink 插件已加载');
     } catch (error) {
-      console.error('Failed to load CogniLink plugin:', error);
-      new Notice('CogniLink 插件加载失败');
+      console.error('[main] onload error:', error);
+      new Notice('CogniLink 插件加载失败: ' + error.message);
+      throw error;
     }
   }
 
@@ -218,3 +199,6 @@ export default class CogniLinkPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 }
+
+// 使用 CommonJS 导出以确保 Obsidian 能加载插件
+module.exports = CogniLinkPlugin;

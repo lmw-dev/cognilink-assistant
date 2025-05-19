@@ -3,3 +3,31 @@ description:
 globs:
 alwaysApply: false
 ---
+# AI Integration Workflow
+
+The CogniLink Assistant integrates with various AI providers and implements RAG (Retrieval Augmented Generation) for context-aware responses.
+
+## Core Services
+- [src/services/AIService.ts](mdc:src/services/AIService.ts) - Main AI service
+  - Handles message processing
+  - Manages API provider selection (OpenAI/Anthropic/Local)
+  - Integrates with embedding service for context
+- [src/services/EmbeddingService.ts](mdc:src/services/EmbeddingService.ts) - Embedding service
+  - Manages semantic search
+  - Handles note embedding generation
+  - Implements cosine similarity search
+
+## Data Flow
+1. User input is received in [src/components/Chat.tsx](mdc:src/components/Chat.tsx)
+2. Message is sent to AIService
+3. EmbeddingService finds relevant notes
+4. Context is prepared and sent to AI provider
+5. Response is processed and displayed with sources
+
+## Configuration
+Settings for AI providers are defined in:
+- [src/types/settings.ts](mdc:src/types/settings.ts) - Settings interface
+- [src/constants/settings.ts](mdc:src/constants/settings.ts) - Default settings
+
+## Message Types
+Chat message types and interfaces are defined in [src/types/chat.ts](mdc:src/types/chat.ts)

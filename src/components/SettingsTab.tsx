@@ -1,26 +1,50 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import CogniLinkPlugin from '../main';
 import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing } from '../types/settings';
+import { AnthropicProvider } from '../services/AnthropicProvider';
+import { OpenAIProvider } from '../services/OpenAIProvider';
 
 export class SettingsTab extends PluginSettingTab {
   plugin: CogniLinkPlugin;
   settings: PluginSettings;
+  private showAnthropicKey: boolean = false;
+  private showOpenAIKey: boolean = false;
+  private testResult: string = '';
+  private testResultColor: string = '';
 
   constructor(app: App, plugin: CogniLinkPlugin) {
     super(app, plugin);
+    console.log('SettingsTab constructor called');
     this.plugin = plugin;
     this.settings = plugin.settings;
+    console.log('SettingsTab settings:', this.settings);
   }
 
   display(): void {
+    console.log('SettingsTab display called');
     const { containerEl } = this;
     containerEl.empty();
 
     // 健壮性校验，防止 settings 为空时报错
-    if (!this.settings || !this.settings.ai || !this.settings.ui) {
-      containerEl.createEl('div', { text: '设置加载失败，请重启插件。' });
+    if (!this.settings) {
+      console.error('Settings is undefined');
+      containerEl.createEl('div', { text: '设置加载失败：settings 未定义，请重启插件。' });
       return;
     }
+
+    if (!this.settings.ai) {
+      console.error('AI settings is undefined');
+      containerEl.createEl('div', { text: '设置加载失败：AI 设置未定义，请重启插件。' });
+      return;
+    }
+
+    if (!this.settings.ui) {
+      console.error('UI settings is undefined');
+      containerEl.createEl('div', { text: '设置加载失败：UI 设置未定义，请重启插件。' });
+      return;
+    }
+
+    console.log('Settings validation passed, rendering settings UI');
 
     // AI Provider Settings
     new Setting(containerEl)
@@ -61,37 +85,136 @@ export class SettingsTab extends PluginSettingTab {
 
     // Anthropic API Key
     if (this.settings.ai.provider === 'anthropic') {
-      new Setting(containerEl)
+      const setting = new Setting(containerEl)
         .setName('Anthropic API Key')
-        .setDesc('输入你的 Anthropic API Key')
-        .addText(text => text
+        .setDesc('输入你的 Anthropic API Key');
+      const input = setting.addText(text => {
+        text
           .setPlaceholder('sk-ant-...')
           .setValue(this.settings.ai.anthropicApiKey)
           .onChange(async (value) => {
             this.settings.ai.anthropicApiKey = value;
+            await this.plugin.saveSettings();
+            this.testResult = '';
+            this.display();
+          });
+        text.inputEl.type = this.showAnthropicKey ? 'text' : 'password';
+      });
+      setting.addExtraButton(btn => {
+        btn.setIcon(this.showAnthropicKey ? 'eye-off' : 'eye')
+          .setTooltip(this.showAnthropicKey ? '隐藏' : '显示')
+          .onClick(() => {
+            this.showAnthropicKey = !this.showAnthropicKey;
+            this.display();
+          });
+      });
+      setting.addButton(btn => {
+        btn.setButtonText('测试密钥').onClick(async () => {
+          this.testResult = '测试中...';
+          this.testResultColor = 'var(--text-warning)';
+          this.display();
+          const provider = new AnthropicProvider({
+            apiKey: this.settings.ai.anthropicApiKey,
+            endpoint: this.settings.ai.anthropicEndpoint,
+            model: this.settings.ai.model,
+            maxTokens: 1,
+            temperature: 0,
+          });
+          const result = await provider.validateApiKey();
+          if (result.valid) {
+            this.testResult = '密钥有效';
+            this.testResultColor = 'var(--text-success)';
+          } else {
+            this.testResult = result.error || '密钥无效';
+            this.testResultColor = 'var(--text-error)';
+          }
+          this.display();
+        });
+      });
+      if (this.testResult) {
+        const resultEl = containerEl.createEl('div', {
+          text: this.testResult,
+        });
+        resultEl.style.color = this.testResultColor;
+        resultEl.style.marginTop = '4px';
+      }
+
+      // Anthropic Endpoint
+      new Setting(containerEl)
+        .setName('Anthropic Endpoint')
+        .setDesc('自定义 Anthropic API 端点（可选）')
+        .addText(text => text
+          .setPlaceholder('https://api.anthropic.com')
+          .setValue(this.settings.ai.anthropicEndpoint || '')
+          .onChange(async (value) => {
+            this.settings.ai.anthropicEndpoint = value;
             await this.plugin.saveSettings();
           }));
     }
 
     // OpenAI API Key
     if (this.settings.ai.provider === 'openai') {
-      new Setting(containerEl)
+      const setting = new Setting(containerEl)
         .setName('OpenAI API Key')
-        .setDesc('输入你的 OpenAI API Key')
-        .addText(text => text
+        .setDesc('输入你的 OpenAI API Key');
+      const input = setting.addText(text => {
+        text
           .setPlaceholder('sk-...')
           .setValue(this.settings.ai.openAIApiKey || '')
           .onChange(async (value) => {
             this.settings.ai.openAIApiKey = value;
             await this.plugin.saveSettings();
-          }));
+            this.testResult = '';
+            this.display();
+          });
+        text.inputEl.type = this.showOpenAIKey ? 'text' : 'password';
+      });
+      setting.addExtraButton(btn => {
+        btn.setIcon(this.showOpenAIKey ? 'eye-off' : 'eye')
+          .setTooltip(this.showOpenAIKey ? '隐藏' : '显示')
+          .onClick(() => {
+            this.showOpenAIKey = !this.showOpenAIKey;
+            this.display();
+          });
+      });
+      setting.addButton(btn => {
+        btn.setButtonText('测试密钥').onClick(async () => {
+          this.testResult = '测试中...';
+          this.testResultColor = 'var(--text-warning)';
+          this.display();
+          const provider = new OpenAIProvider({
+            apiKey: this.settings.ai.openAIApiKey || '',
+            endpoint: this.settings.ai.openAIEndpoint || 'https://api.openai.com/v1',
+            model: this.settings.ai.model,
+            maxTokens: 1,
+            temperature: 0,
+          });
+          const result = await provider.validateApiKey();
+          if (result.valid) {
+            this.testResult = '密钥有效';
+            this.testResultColor = 'var(--text-success)';
+          } else {
+            this.testResult = result.error || '密钥无效';
+            this.testResultColor = 'var(--text-error)';
+          }
+          this.display();
+        });
+      });
+      if (this.testResult) {
+        const resultEl = containerEl.createEl('div', {
+          text: this.testResult,
+        });
+        resultEl.style.color = this.testResultColor;
+        resultEl.style.marginTop = '4px';
+      }
+      
       // OpenAI Endpoint
       new Setting(containerEl)
         .setName('OpenAI Endpoint')
-        .setDesc('自定义 OpenAI API Endpoint，通常保持默认即可')
+        .setDesc('自定义 OpenAI API 端点（可选）')
         .addText(text => text
           .setPlaceholder('https://api.openai.com/v1')
-          .setValue(this.settings.ai.openAIEndpoint || 'https://api.openai.com/v1')
+          .setValue(this.settings.ai.openAIEndpoint || '')
           .onChange(async (value) => {
             this.settings.ai.openAIEndpoint = value;
             await this.plugin.saveSettings();

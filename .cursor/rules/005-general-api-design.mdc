@@ -1,0 +1,151 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: "适用于项目中所有 API (Next.js API 路由或独立 Node.js 后端) 的通用设计原则。"
+globs:
+  - "pages/api/**/*.ts"
+  - "app/api/**/*.ts" # 适用于 Next.js App Router
+  - "src/pages/api/**/*.ts"
+  - "src/app/api/**/*.ts"
+  - "server/routes/**/*.ts" # 假设独立后端的路由目录
+  - "src/server/routes/**/*.ts"
+alwaysApply: false # Auto Attached，当处理 API 相关文件时
+---
+
+# API 设计规范
+
+## 1. 目录结构
+- 所有 API 路由文件应放在 `src/app/api/` 目录下，按业务模块组织
+- 每个接口一个 `route.ts` 文件，方法名与 HTTP 动词一致（如 `export async function GET()`）
+- 相关测试文件放在 `__test__` 目录下
+
+## 2. 统一响应格式
+所有 API 响应必须遵循以下格式：
+```typescript
+interface ApiResponse<T> {
+  code: number;        // 状态码，0 表示成功，其他为错误码
+  message: string;     // 响应消息
+  data: T | null;      // 响应数据，失败时为 null
+}
+```
+
+## 3. 错误处理
+- 使用 `src/errors/codes.ts` 中定义的 `ErrorCode` 枚举
+- 错误码分类：
+  - 1000-1999: 通用错误
+  - 2000-2999: 数据验证错误
+  - 3000-3999: 业务逻辑错误
+  - 4000-4999: 事务错误
+  - 5000-5999: 数据库操作错误
+  - 9000-9999: 系统错误
+- 错误响应示例：
+```typescript
+return NextResponse.json({
+  code: ErrorCode.INVALID_PARAMETER,
+  message: '参数错误：xxx',
+  data: null
+}, { status: 400 });
+```
+
+## 4. 参数校验
+- 必须对所有入参进行非空/类型/格式校验
+- 使用 TypeScript 类型定义请求参数
+- 校验失败时返回 400 状态码和对应的错误信息
+
+## 5. 权限控制
+- 需要登录/鉴权的接口，在 route.ts 顶部用注释标明 `@requiresAuth`
+- 未登录或无权限时返回：
+```typescript
+return NextResponse.json({
+  code: ErrorCode.PERMISSION_DENIED,
+  message: '未登录或权限不足',
+  data: null
+}, { status: 401 });
+```
+
+## 6. API 文档
+每个接口必须包含完整的 Swagger/OpenAPI 文档注释：
+```typescript
+/**
+ * @swagger
+ * /api/example:
+ *   get:
+ *     summary: 接口描述
+ *     tags:
+ *       - 模块名称
+ *     parameters:
+ *       - in: query
+ *         name: paramName
+ *         schema:
+ *           type: string
+ *         description: 参数描述
+ *     responses:
+ *       200:
+ *         description: 成功响应
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 code:
+ *                   type: integer
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ */
+```
+
+## 7. 分页处理
+列表接口必须支持分页，参数：
+- `page`: 页码，默认 1
+- `pageSize`: 每页数量，默认 10
+- 响应格式：
+```typescript
+{
+  code: 0,
+  message: 'success',
+  data: {
+    list: T[],
+    pagination: {
+      total: number,
+      current: number,
+      pageSize: number,
+      totalPages: number
+    }
+  }
+}
+```
+
+## 8. 文件导出
+文件导出接口：
+- 使用 `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` 作为 Content-Type
+- 设置 `Content-Disposition` 头指定文件名
+- 错误时返回 JSON 格式错误信息
+
+## 9. 日志记录
+- 使用 console.log 记录关键操作日志
+- 错误日志包含完整的错误信息和堆栈
+- 敏感信息脱敏处理
+
+## 10. 性能优化
+- 合理使用缓存
+- 大数据量查询使用分页
+- 避免 N+1 查询问题
+- 使用适当的数据库索引
+
+## 11. 安全措施
+- 所有用户输入必须经过验证和转义
+- 敏感数据加密存储
+- 使用 HTTPS
+- 实现请求频率限制
+- 防止 SQL 注入和 XSS 攻击
+
+## 12. 测试要求
+- 每个 API 接口必须有对应的单元测试
+- 测试文件放在 `__test__` 目录下
+- 测试用例覆盖成功和失败场景
+- 使用 mock 数据避免外部依赖

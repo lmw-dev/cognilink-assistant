@@ -9,7 +9,10 @@
     "test": "jest",
     "lint": "eslint . --ext .ts,.tsx",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "deploy": "./scripts/deploy.sh",
+    "clean": "rm -rf dist/ build/ coverage/",
+    "validate": "npm run lint && npm test && npm run build"
   },
   "keywords": [
     "obsidian-plugin",

@@ -1,8 +1,14 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
+---
+description: "Linear 任务创建和描述的标准化规范"
+globs: ["**/*"]
+alwaysApply: true
+---
+
 # Linear 任务描述规范
 
 ## 任务标题
@@ -97,7 +103,7 @@ alwaysApply: false
 - Team：必填
 - Assignee：建议指定（需支持 UUID 查询）
 - 标签（Labels）：建议补全
-- 项目（Project）：如有，建议指定
+- 项目（Project）：02-marathon Lite
 - 优先级（Priority）：必填
 - 父任务（Parent Issue）：如有，建议指定
 
@@ -108,6 +114,4 @@ alwaysApply: false
 - 【验收标准】
 - 【相关文档/链接】
 
-## 分支命名
-- 格式：{assignee}/{issue-key}-{type}-{简述}
-  - 例：liumw1203/tom-25-task-插件主结构与生命周期管理
+

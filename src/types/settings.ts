@@ -29,6 +29,7 @@ export interface AISettings {
   provider: AIProvider;
   model: AIModel;
   anthropicApiKey: string;
+  anthropicEndpoint?: string;
   openAIApiKey?: string;
   openAIEndpoint?: string;
   maxTokens: number;
@@ -57,6 +58,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     provider: 'anthropic',
     model: 'claude-2',
     anthropicApiKey: '',
+    anthropicEndpoint: 'https://api.anthropic.com',
     openAIApiKey: '',
     openAIEndpoint: 'https://api.openai.com/v1',
     maxTokens: 2000,
