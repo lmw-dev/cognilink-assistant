@@ -140,4 +140,12 @@ export class AIService {
     
     return this.provider.generateEmbeddings(text);
   }
+
+  /**
+   * 根据主题和上下文生成原创文档（mock，后续替换为真实实现）
+   */
+  async generateOriginalDoc(theme: string, context: string): Promise<string> {
+    // 具体实现由 main.ts mock，或后续补充
+    return '';
+  }
 }

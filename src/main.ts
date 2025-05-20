@@ -10,6 +10,8 @@ import { AccessibilityManager } from './services/AccessibilityManager';
 import { EmbeddingService } from './services/EmbeddingService';
 import { AIService } from './services/AIService';
 import { NoteMetaService } from './services/NoteMetaService';
+import { ThemeInputModal } from './components/ThemeInputModal';
+import { MarkdownView, TFile, Modal, App } from 'obsidian';
 
 // Define the chat icon
 const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -120,6 +122,27 @@ export default class CogniLinkPlugin extends Plugin {
           new Notice('原创性检测功能开发中');
         }
       });
+      this.addCommand({
+        id: 'generate-original-doc-from-theme',
+        name: '主题驱动原创文档生成',
+        callback: () => {
+          this.showThemeInputModal();
+        },
+        hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'g' }],
+      });
+      // 编辑区右键菜单入口
+      this.addCommand({
+        id: 'generate-original-doc-from-selection',
+        name: '以选中文本为主题生成原创文档',
+        editorCallback: (editor) => {
+          const selected = editor.getSelection();
+          this.showThemeInputModal(selected);
+        },
+      });
+      // Ribbon 工具栏按钮也支持主题生成
+      this.addRibbonIcon('cognilink-chat', 'CogniLink Assistant', async () => {
+        this.showThemeInputModal();
+      });
       console.log('Plugin commands registered.');
 
       // 注册 SettingsTab 必须在 settings 加载后
@@ -198,7 +221,107 @@ export default class CogniLinkPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
   }
+
+  // 主题输入弹窗（Modal）入口，集成生成与预览插入主流程
+  showThemeInputModal(selectedText?: string) {
+    const initialTheme = selectedText || '';
+    new ThemeInputModal({
+      app: this.app,
+      initialTheme,
+      onSubmit: async (theme, includeContext, close, setLoading, setError) => {
+        try {
+          setLoading(true);
+          // 组装上下文
+          let context = '';
+          if (includeContext) {
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (activeView) {
+              context = activeView.editor.getValue();
+            }
+          }
+          // 调用 AI 生成（mock，后续替换为真实实现）
+          const result = await this.aiService.generateOriginalDoc(theme, context);
+          setLoading(false);
+          close();
+          // 弹出预览与插入
+          new PreviewModal(this.app, result, (finalContent, insertToNewNote) => {
+            if (insertToNewNote) {
+              this.insertToNewNote(finalContent, theme);
+            } else {
+              this.insertToCurrentNote(finalContent);
+            }
+          }).open();
+        } catch (e) {
+          setLoading(false);
+          setError(e?.message || '生成失败，请重试');
+        }
+      }
+    }).open();
+  }
+
+  // 插入到当前笔记
+  insertToCurrentNote(content: string) {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (view) {
+      const editor = view.editor;
+      editor.replaceSelection(content);
+      new Notice('已插入到当前笔记');
+    } else {
+      new Notice('未找到可用的 Markdown 编辑器');
+    }
+  }
+
+  // 插入到新建笔记
+  async insertToNewNote(content: string, theme: string) {
+    const file = await this.app.vault.create(`${theme || '原创文档'}-${Date.now()}.md`, content);
+    await this.app.workspace.getLeaf(true).openFile(file as TFile);
+    new Notice('已插入到新建笔记');
+  }
 }
+
+// 生成结果预览 Modal
+class PreviewModal extends Modal {
+  private content: string;
+  private onInsert: (content: string, insertToNewNote: boolean) => void;
+  private textarea: HTMLTextAreaElement;
+  constructor(app: App, content: string, onInsert: (content: string, insertToNewNote: boolean) => void) {
+    super(app);
+    this.content = content;
+    this.onInsert = onInsert;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h2', { text: '生成结果预览' });
+    this.textarea = contentEl.createEl('textarea');
+    this.textarea.style.width = '100%';
+    this.textarea.style.height = '300px';
+    this.textarea.value = this.content;
+    // 按钮区
+    const btnRow = contentEl.createDiv({ cls: 'theme-modal-btn-row' });
+    const insertBtn = btnRow.createEl('button', { text: '插入到当前笔记', cls: 'mod-cta' });
+    insertBtn.onclick = () => {
+      this.onInsert(this.textarea.value, false);
+      this.close();
+    };
+    const newNoteBtn = btnRow.createEl('button', { text: '插入到新建笔记' });
+    newNoteBtn.onclick = () => {
+      this.onInsert(this.textarea.value, true);
+      this.close();
+    };
+    const cancelBtn = btnRow.createEl('button', { text: '取消' });
+    cancelBtn.onclick = () => this.close();
+  }
+}
+
+// mock aiService.generateOriginalDoc
+AIService.prototype.generateOriginalDoc = async function(theme: string, context: string): Promise<string> {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(`# ${theme}\n\n这是根据主题"${theme}"${context ? '并结合当前笔记内容' : ''}生成的原创文档示例。\n\n- 亮点1\n- 亮点2\n\n> 生成内容仅供参考。`);
+    }, 1800);
+  });
+};
 
 // 使用 CommonJS 导出以确保 Obsidian 能加载插件
 module.exports = CogniLinkPlugin;
