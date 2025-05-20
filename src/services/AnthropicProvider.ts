@@ -70,8 +70,26 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async testConnection(): Promise<boolean> {
-    // TODO: 实现 API 连通性测试
-    return true;
+    const url = `${this.options.endpoint || 'https://api.anthropic.com'}/v1/messages`;
+    const headers = {
+      'x-api-key': this.options.apiKey,
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    const body = {
+      model: this.options.model,
+      max_tokens: 1,
+      temperature: 0,
+      system: '',
+      messages: [ { role: 'user', content: 'ping' } ]
+    };
+    try {
+      const response = await requestUrl({ url, method: 'POST', headers, body: JSON.stringify(body), throw: false });
+      if (response.status === 200) return true;
+      throw new Error(`连接失败: ${response.status} ${response.text}`);
+    } catch (err: any) {
+      throw new Error(`Anthropic Endpoint 连接失败: ${err.message || err}`);
+    }
   }
 
   async validateApiKey(): Promise<{ valid: boolean; error?: string }> {

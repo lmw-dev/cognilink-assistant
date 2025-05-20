@@ -1,8 +1,9 @@
-import { App, PluginSettingTab, Setting, setTooltip } from 'obsidian';
+import { App, PluginSettingTab, Setting, setTooltip, Notice } from 'obsidian';
 import CogniLinkPlugin from '../main';
 import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing } from '../types/settings';
 import { AnthropicProvider } from '../services/AnthropicProvider';
 import { OpenAIProvider } from '../services/OpenAIProvider';
+import { AI_MODELS } from '../constants/ai-models';
 
 export class SettingsTab extends PluginSettingTab {
   plugin: CogniLinkPlugin;
@@ -66,15 +67,9 @@ export class SettingsTab extends PluginSettingTab {
       .setName('AI Model')
       .setDesc('选择 AI 模型')
       .addDropdown(dropdown => {
-        if (this.settings.ai.provider === 'anthropic') {
-          dropdown
-            .addOption('claude-2', 'Claude 2')
-            .addOption('claude-instant', 'Claude Instant');
-        } else if (this.settings.ai.provider === 'openai') {
-          dropdown
-            .addOption('gpt-3.5-turbo', 'GPT-3.5 Turbo')
-            .addOption('gpt-4', 'GPT-4');
-        }
+        const provider = this.settings.ai.provider;
+        const models = AI_MODELS[provider] || [];
+        models.forEach(m => dropdown.addOption(m.value, m.label));
         return dropdown
           .setValue(this.settings.ai.model)
           .onChange(async (value: AIModel) => {
@@ -118,23 +113,23 @@ export class SettingsTab extends PluginSettingTab {
       setTooltip(warn, 'API 密钥仅保存在本地，请妥善保管，避免泄露。');
       setting.settingEl.appendChild(warn);
       setting.addButton(btn => {
-        btn.setButtonText('测试密钥').onClick(async () => {
+        btn.setButtonText('测试连接').onClick(async () => {
           this.testResult = '测试中...';
           this.testResultColor = 'var(--text-warning)';
           this.display();
-          const provider = new AnthropicProvider({
-            apiKey: this.settings.ai.anthropicApiKey,
-            endpoint: this.settings.ai.anthropicEndpoint,
-            model: this.settings.ai.model,
-            maxTokens: 1,
-            temperature: 0,
-          });
-          const result = await provider.validateApiKey();
-          if (result.valid) {
-            this.testResult = '密钥有效';
+          try {
+            const provider = new AnthropicProvider({
+              apiKey: this.settings.ai.anthropicApiKey,
+              endpoint: this.settings.ai.anthropicEndpoint || 'https://api.anthropic.com',
+              model: this.settings.ai.model,
+              maxTokens: 1,
+              temperature: 0,
+            });
+            await provider.testConnection();
+            this.testResult = '连接成功！';
             this.testResultColor = 'var(--text-success)';
-          } else {
-            this.testResult = result.error || '密钥无效';
+          } catch (err: any) {
+            this.testResult = err.message || '连接失败';
             this.testResultColor = 'var(--text-error)';
           }
           this.display();
@@ -152,13 +147,28 @@ export class SettingsTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName('Anthropic Endpoint')
         .setDesc('自定义 Anthropic API 端点（可选）')
-        .addText(text => text
-          .setPlaceholder('https://api.anthropic.com')
-          .setValue(this.settings.ai.anthropicEndpoint || '')
-          .onChange(async (value) => {
-            this.settings.ai.anthropicEndpoint = value;
+        .addText((text) => {
+          text.setPlaceholder('https://api.anthropic.com')
+            .setValue(this.settings.ai.anthropicEndpoint || '')
+            .onChange(async (value) => {
+              if (!/^https?:\/\//.test(value)) {
+                new Notice('Endpoint 必须以 http:// 或 https:// 开头');
+                return;
+              }
+              this.settings.ai.anthropicEndpoint = value;
+              await this.plugin.saveSettings();
+            });
+          // 重置按钮
+          const resetBtn = document.createElement('button');
+          resetBtn.textContent = '重置为默认';
+          resetBtn.style.marginLeft = '8px';
+          resetBtn.onclick = async () => {
+            this.settings.ai.anthropicEndpoint = 'https://api.anthropic.com';
+            text.setValue('https://api.anthropic.com');
             await this.plugin.saveSettings();
-          }));
+          };
+          text.inputEl.parentElement?.appendChild(resetBtn);
+        });
     }
 
     // OpenAI API Key
@@ -196,23 +206,23 @@ export class SettingsTab extends PluginSettingTab {
       setTooltip(warn, 'API 密钥仅保存在本地，请妥善保管，避免泄露。');
       setting.settingEl.appendChild(warn);
       setting.addButton(btn => {
-        btn.setButtonText('测试密钥').onClick(async () => {
+        btn.setButtonText('测试连接').onClick(async () => {
           this.testResult = '测试中...';
           this.testResultColor = 'var(--text-warning)';
           this.display();
-          const provider = new OpenAIProvider({
-            apiKey: this.settings.ai.openAIApiKey || '',
-            endpoint: this.settings.ai.openAIEndpoint || 'https://api.openai.com/v1',
-            model: this.settings.ai.model,
-            maxTokens: 1,
-            temperature: 0,
-          });
-          const result = await provider.validateApiKey();
-          if (result.valid) {
-            this.testResult = '密钥有效';
+          try {
+            const provider = new OpenAIProvider({
+              apiKey: this.settings.ai.openAIApiKey || '',
+              endpoint: this.settings.ai.openAIEndpoint || 'https://api.openai.com/v1',
+              model: this.settings.ai.model,
+              maxTokens: 1,
+              temperature: 0,
+            });
+            await provider.testConnection();
+            this.testResult = '连接成功！';
             this.testResultColor = 'var(--text-success)';
-          } else {
-            this.testResult = result.error || '密钥无效';
+          } catch (err: any) {
+            this.testResult = err.message || '连接失败';
             this.testResultColor = 'var(--text-error)';
           }
           this.display();
@@ -230,13 +240,28 @@ export class SettingsTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName('OpenAI Endpoint')
         .setDesc('自定义 OpenAI API 端点（可选）')
-        .addText(text => text
-          .setPlaceholder('https://api.openai.com/v1')
-          .setValue(this.settings.ai.openAIEndpoint || '')
-          .onChange(async (value) => {
-            this.settings.ai.openAIEndpoint = value;
+        .addText((text) => {
+          text.setPlaceholder('https://api.openai.com/v1')
+            .setValue(this.settings.ai.openAIEndpoint || '')
+            .onChange(async (value) => {
+              if (!/^https?:\/\//.test(value)) {
+                new Notice('Endpoint 必须以 http:// 或 https:// 开头');
+                return;
+              }
+              this.settings.ai.openAIEndpoint = value;
+              await this.plugin.saveSettings();
+            });
+          // 重置按钮
+          const resetBtn = document.createElement('button');
+          resetBtn.textContent = '重置为默认';
+          resetBtn.style.marginLeft = '8px';
+          resetBtn.onclick = async () => {
+            this.settings.ai.openAIEndpoint = 'https://api.openai.com/v1';
+            text.setValue('https://api.openai.com/v1');
             await this.plugin.saveSettings();
-          }));
+          };
+          text.inputEl.parentElement?.appendChild(resetBtn);
+        });
     }
 
     // Temperature

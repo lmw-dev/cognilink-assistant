@@ -34,6 +34,9 @@ export class OpenAIProvider implements AIProvider {
       max_tokens: maxTokens,
       temperature,
     };
+    console.log('[OpenAIProvider][sendMessage] url:', url);
+    console.log('[OpenAIProvider][sendMessage] headers:', headers);
+    console.log('[OpenAIProvider][sendMessage] body:', body);
     try {
       const response = await requestUrl({
         url,
@@ -74,6 +77,9 @@ export class OpenAIProvider implements AIProvider {
       model: 'text-embedding-ada-002',
       input: text,
     };
+    console.log('[OpenAIProvider][generateEmbeddings] url:', url);
+    console.log('[OpenAIProvider][generateEmbeddings] headers:', headers);
+    console.log('[OpenAIProvider][generateEmbeddings] body:', body);
     try {
       const response = await requestUrl({
         url,
@@ -98,8 +104,27 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async testConnection(): Promise<boolean> {
-    // TODO: 实现 API 连通性测试
-    return true;
+    const url = `${this.options.endpoint}/models`;
+    const headers = {
+      'Authorization': `Bearer ${this.options.apiKey}`,
+      'Content-Type': 'application/json',
+    };
+    console.log('[OpenAIProvider][testConnection] url:', url);
+    console.log('[OpenAIProvider][testConnection] headers:', headers);
+    try {
+      const response = await requestUrl({ url, method: 'GET', headers, throw: false });
+      console.log('[OpenAIProvider][testConnection] response.status:', response.status);
+      console.log('[OpenAIProvider][testConnection] response.text:', response.text);
+      try {
+        console.log('[OpenAIProvider][testConnection] response.json:', response.json);
+      } catch (e) {
+        // response 不是 json 时忽略
+      }
+      if (response.status === 200) return true;
+      throw new Error(`连接失败: ${response.status} ${response.text}`);
+    } catch (err: any) {
+      throw new Error(`OpenAI Endpoint 连接失败: ${err.message || err}`);
+    }
   }
 
   async validateApiKey(): Promise<{ valid: boolean; error?: string }> {

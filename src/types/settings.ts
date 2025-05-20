@@ -1,5 +1,7 @@
+import type { ProviderModelValue } from '../constants/ai-models';
+
 export type AIProvider = 'anthropic' | 'local' | 'openai';
-export type AIModel = 'claude-2' | 'claude-instant' | 'gpt-3.5-turbo' | 'gpt-4';
+export type AIModel = ProviderModelValue;
 export type Theme = 'system' | 'light' | 'dark';
 export type FontSize = 'small' | 'medium' | 'large';
 export type MessageSpacing = 'compact' | 'comfortable' | 'spacious';
