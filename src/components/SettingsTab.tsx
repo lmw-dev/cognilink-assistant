@@ -4,6 +4,7 @@ import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing } from '../t
 import { AnthropicProvider } from '../services/AnthropicProvider';
 import { OpenAIProvider } from '../services/OpenAIProvider';
 import { AI_MODELS } from '../constants/ai-models';
+import { ConfigurationError, APIError, NetworkError } from '../services/AIService';
 
 export class SettingsTab extends PluginSettingTab {
   plugin: CogniLinkPlugin;
@@ -129,8 +130,27 @@ export class SettingsTab extends PluginSettingTab {
             this.testResult = '连接成功！';
             this.testResultColor = 'var(--text-success)';
           } catch (err: any) {
-            this.testResult = err.message || '连接失败';
-            this.testResultColor = 'var(--text-error)';
+            if (err instanceof ConfigurationError) {
+              this.testResult = '配置错误：' + err.message;
+              this.testResultColor = 'var(--text-error)';
+              new Notice(this.testResult);
+              console.error('[SettingsTab] 配置错误:', err);
+            } else if (err instanceof NetworkError) {
+              this.testResult = '网络错误：' + err.message;
+              this.testResultColor = 'var(--text-error)';
+              new Notice(this.testResult);
+              console.error('[SettingsTab] 网络错误:', err);
+            } else if (err instanceof APIError) {
+              this.testResult = 'API 错误：' + err.message;
+              this.testResultColor = 'var(--text-error)';
+              new Notice(this.testResult);
+              console.error('[SettingsTab] API 错误:', err);
+            } else {
+              this.testResult = '未知错误：' + (err?.message || err);
+              this.testResultColor = 'var(--text-error)';
+              new Notice(this.testResult);
+              console.error('[SettingsTab] 未知错误:', err);
+            }
           }
           this.display();
         });
@@ -222,8 +242,27 @@ export class SettingsTab extends PluginSettingTab {
             this.testResult = '连接成功！';
             this.testResultColor = 'var(--text-success)';
           } catch (err: any) {
-            this.testResult = err.message || '连接失败';
-            this.testResultColor = 'var(--text-error)';
+            if (err instanceof ConfigurationError) {
+              this.testResult = '配置错误：' + err.message;
+              this.testResultColor = 'var(--text-error)';
+              new Notice(this.testResult);
+              console.error('[SettingsTab] 配置错误:', err);
+            } else if (err instanceof NetworkError) {
+              this.testResult = '网络错误：' + err.message;
+              this.testResultColor = 'var(--text-error)';
+              new Notice(this.testResult);
+              console.error('[SettingsTab] 网络错误:', err);
+            } else if (err instanceof APIError) {
+              this.testResult = 'API 错误：' + err.message;
+              this.testResultColor = 'var(--text-error)';
+              new Notice(this.testResult);
+              console.error('[SettingsTab] API 错误:', err);
+            } else {
+              this.testResult = '未知错误：' + (err?.message || err);
+              this.testResultColor = 'var(--text-error)';
+              new Notice(this.testResult);
+              console.error('[SettingsTab] 未知错误:', err);
+            }
           }
           this.display();
         });

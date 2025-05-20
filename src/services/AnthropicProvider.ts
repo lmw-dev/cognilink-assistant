@@ -1,6 +1,7 @@
 import { AIProvider } from './AIProvider';
 import { Message, MessageRole } from '../types/message';
 import { requestUrl } from 'obsidian';
+import { APIError, NetworkError } from './AIService';
 
 export interface AnthropicProviderOptions {
   apiKey: string;
@@ -44,7 +45,7 @@ export class AnthropicProvider implements AIProvider {
         throw: false,
       });
       if (response.status !== 200) {
-        throw new Error(`Anthropic API error: ${response.status} ${response.text}`);
+        throw new APIError(`Anthropic API error: ${response.status} ${response.text}`);
       }
       const data = response.json;
       const content = data.content?.[0]?.text || 'No response from Anthropic.';
@@ -55,12 +56,11 @@ export class AnthropicProvider implements AIProvider {
         timestamp: Date.now(),
       };
     } catch (err: any) {
-      return {
-        id: Date.now().toString(),
-        role: 'error' as MessageRole,
-        content: `Anthropic API 调用失败: ${err.message || err}`,
-        timestamp: Date.now(),
-      };
+      if (err instanceof APIError) throw err;
+      if (err.message && err.message.includes('network')) {
+        throw new NetworkError(`Anthropic 网络错误: ${err.message}`);
+      }
+      throw new APIError(`Anthropic API 调用失败: ${err.message || err}`);
     }
   }
 
@@ -86,9 +86,13 @@ export class AnthropicProvider implements AIProvider {
     try {
       const response = await requestUrl({ url, method: 'POST', headers, body: JSON.stringify(body), throw: false });
       if (response.status === 200) return true;
-      throw new Error(`连接失败: ${response.status} ${response.text}`);
+      throw new APIError(`连接失败: ${response.status} ${response.text}`);
     } catch (err: any) {
-      throw new Error(`Anthropic Endpoint 连接失败: ${err.message || err}`);
+      if (err instanceof APIError) throw err;
+      if (err.message && err.message.includes('network')) {
+        throw new NetworkError(`Anthropic 网络错误: ${err.message}`);
+      }
+      throw new APIError(`Anthropic Endpoint 连接失败: ${err.message || err}`);
     }
   }
 

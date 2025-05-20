@@ -111,18 +111,28 @@ export class AIService {
   }
 
   async sendMessage(message: Message): Promise<Message> {
-    console.log('[AIService] sendMessage called with:', {
-      messageId: message.id,
-      role: message.role,
-      timestamp: message.timestamp,
-    });
-    
-    this.logger.info('Sending message', { 
-      provider: this.settings.ai.provider,
-      model: this.settings.ai.model,
-    });
-    
-    return this.provider.sendMessage(message);
+    try {
+      const provider = this.createProvider();
+      return await provider.sendMessage(message);
+    } catch (err: any) {
+      if (err instanceof ConfigurationError) {
+        console.error('[AIService] 配置错误:', err);
+        new Notice('AI 配置错误：' + err.message);
+        throw err;
+      } else if (err instanceof NetworkError) {
+        console.error('[AIService] 网络错误:', err);
+        new Notice('AI 网络错误：' + err.message);
+        throw err;
+      } else if (err instanceof APIError) {
+        console.error('[AIService] API 错误:', err);
+        new Notice('AI API 错误：' + err.message);
+        throw err;
+      } else {
+        console.error('[AIService] 未知错误:', err);
+        new Notice('AI 未知错误：' + (err?.message || err));
+        throw err;
+      }
+    }
   }
 
   async generateEmbeddings(text: string): Promise<number[]> {

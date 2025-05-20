@@ -1,6 +1,7 @@
 import { AIProvider } from './AIProvider';
 import { Message, MessageRole } from '../types/message';
 import { requestUrl } from 'obsidian';
+import { APIError, NetworkError } from './AIService';
 
 export interface OpenAIProviderOptions {
   apiKey: string;
@@ -46,7 +47,7 @@ export class OpenAIProvider implements AIProvider {
         throw: false,
       });
       if (response.status !== 200) {
-        throw new Error(`OpenAI API error: ${response.status} ${response.text}`);
+        throw new APIError(`OpenAI API error: ${response.status} ${response.text}`);
       }
       const data = response.json;
       const content = data.choices?.[0]?.message?.content || 'No response from OpenAI.';
@@ -57,12 +58,11 @@ export class OpenAIProvider implements AIProvider {
         timestamp: Date.now(),
       };
     } catch (err: any) {
-      return {
-        id: Date.now().toString(),
-        role: 'error' as MessageRole,
-        content: `OpenAI API 调用失败: ${err.message || err}`,
-        timestamp: Date.now(),
-      };
+      if (err instanceof APIError) throw err;
+      if (err.message && err.message.includes('network')) {
+        throw new NetworkError(`OpenAI 网络错误: ${err.message}`);
+      }
+      throw new APIError(`OpenAI API 调用失败: ${err.message || err}`);
     }
   }
 
@@ -89,17 +89,20 @@ export class OpenAIProvider implements AIProvider {
         throw: false,
       });
       if (response.status !== 200) {
-        throw new Error(`OpenAI Embedding API error: ${response.status} ${response.text}`);
+        throw new APIError(`OpenAI Embedding API error: ${response.status} ${response.text}`);
       }
       const data = response.json;
       const embedding = data.data?.[0]?.embedding;
       if (Array.isArray(embedding)) {
         return embedding;
       }
-      throw new Error('OpenAI Embedding API: No embedding returned');
+      throw new APIError('OpenAI Embedding API: No embedding returned');
     } catch (err: any) {
-      // 可选：返回空数组或抛出错误
-      return [];
+      if (err instanceof APIError) throw err;
+      if (err.message && err.message.includes('network')) {
+        throw new NetworkError(`OpenAI 网络错误: ${err.message}`);
+      }
+      throw new APIError(`OpenAI Embedding API 调用失败: ${err.message || err}`);
     }
   }
 
@@ -121,9 +124,13 @@ export class OpenAIProvider implements AIProvider {
         // response 不是 json 时忽略
       }
       if (response.status === 200) return true;
-      throw new Error(`连接失败: ${response.status} ${response.text}`);
+      throw new APIError(`连接失败: ${response.status} ${response.text}`);
     } catch (err: any) {
-      throw new Error(`OpenAI Endpoint 连接失败: ${err.message || err}`);
+      if (err instanceof APIError) throw err;
+      if (err.message && err.message.includes('network')) {
+        throw new NetworkError(`OpenAI 网络错误: ${err.message}`);
+      }
+      throw new APIError(`OpenAI Endpoint 连接失败: ${err.message || err}`);
     }
   }
 
