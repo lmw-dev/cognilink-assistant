@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting, setTooltip } from 'obsidian';
 import CogniLinkPlugin from '../main';
 import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing } from '../types/settings';
 import { AnthropicProvider } from '../services/AnthropicProvider';
@@ -85,29 +85,38 @@ export class SettingsTab extends PluginSettingTab {
 
     // Anthropic API Key
     if (this.settings.ai.provider === 'anthropic') {
+      let showAnthropicKey = false;
       const setting = new Setting(containerEl)
         .setName('Anthropic API Key')
-        .setDesc('输入你的 Anthropic API Key');
-      const input = setting.addText(text => {
-        text
-          .setPlaceholder('sk-ant-...')
-          .setValue(this.settings.ai.anthropicApiKey)
-          .onChange(async (value) => {
-            this.settings.ai.anthropicApiKey = value;
-            await this.plugin.saveSettings();
-            this.testResult = '';
-            this.display();
-          });
-        text.inputEl.type = this.showAnthropicKey ? 'text' : 'password';
-      });
-      setting.addExtraButton(btn => {
-        btn.setIcon(this.showAnthropicKey ? 'eye-off' : 'eye')
-          .setTooltip(this.showAnthropicKey ? '隐藏' : '显示')
-          .onClick(() => {
-            this.showAnthropicKey = !this.showAnthropicKey;
-            this.display();
-          });
-      });
+        .setDesc('输入你的 Anthropic API Key')
+        .addText(text => {
+          text.inputEl.type = showAnthropicKey ? 'text' : 'password';
+          text.setPlaceholder('sk-ant-...')
+            .setValue(this.settings.ai.anthropicApiKey)
+            .onChange(async (value) => {
+              this.settings.ai.anthropicApiKey = value;
+              await this.plugin.saveSettings();
+            });
+          const toggleBtn = document.createElement('button');
+          toggleBtn.type = 'button';
+          toggleBtn.textContent = showAnthropicKey ? '隐藏' : '显示';
+          toggleBtn.style.marginLeft = '8px';
+          toggleBtn.onclick = () => {
+            showAnthropicKey = !showAnthropicKey;
+            text.inputEl.type = showAnthropicKey ? 'text' : 'password';
+            toggleBtn.textContent = showAnthropicKey ? '隐藏' : '显示';
+          };
+          text.inputEl.parentElement?.appendChild(toggleBtn);
+        });
+      // 安全警告叹号浮窗
+      const warn = document.createElement('span');
+      warn.textContent = '⚠️';
+      warn.style.color = '#d97706';
+      warn.style.fontSize = '1.1em';
+      warn.style.marginLeft = '8px';
+      warn.style.cursor = 'pointer';
+      setTooltip(warn, 'API 密钥仅保存在本地，请妥善保管，避免泄露。');
+      setting.settingEl.appendChild(warn);
       setting.addButton(btn => {
         btn.setButtonText('测试密钥').onClick(async () => {
           this.testResult = '测试中...';
@@ -154,29 +163,38 @@ export class SettingsTab extends PluginSettingTab {
 
     // OpenAI API Key
     if (this.settings.ai.provider === 'openai') {
+      let showOpenAIKey = false;
       const setting = new Setting(containerEl)
         .setName('OpenAI API Key')
-        .setDesc('输入你的 OpenAI API Key');
-      const input = setting.addText(text => {
-        text
-          .setPlaceholder('sk-...')
-          .setValue(this.settings.ai.openAIApiKey || '')
-          .onChange(async (value) => {
-            this.settings.ai.openAIApiKey = value;
-            await this.plugin.saveSettings();
-            this.testResult = '';
-            this.display();
-          });
-        text.inputEl.type = this.showOpenAIKey ? 'text' : 'password';
-      });
-      setting.addExtraButton(btn => {
-        btn.setIcon(this.showOpenAIKey ? 'eye-off' : 'eye')
-          .setTooltip(this.showOpenAIKey ? '隐藏' : '显示')
-          .onClick(() => {
-            this.showOpenAIKey = !this.showOpenAIKey;
-            this.display();
-          });
-      });
+        .setDesc('输入你的 OpenAI API Key')
+        .addText(text => {
+          text.inputEl.type = showOpenAIKey ? 'text' : 'password';
+          text.setPlaceholder('sk-...')
+            .setValue(this.settings.ai.openAIApiKey || '')
+            .onChange(async (value) => {
+              this.settings.ai.openAIApiKey = value;
+              await this.plugin.saveSettings();
+            });
+          const toggleBtn = document.createElement('button');
+          toggleBtn.type = 'button';
+          toggleBtn.textContent = showOpenAIKey ? '隐藏' : '显示';
+          toggleBtn.style.marginLeft = '8px';
+          toggleBtn.onclick = () => {
+            showOpenAIKey = !showOpenAIKey;
+            text.inputEl.type = showOpenAIKey ? 'text' : 'password';
+            toggleBtn.textContent = showOpenAIKey ? '隐藏' : '显示';
+          };
+          text.inputEl.parentElement?.appendChild(toggleBtn);
+        });
+      // 安全警告叹号浮窗
+      const warn = document.createElement('span');
+      warn.textContent = '⚠️';
+      warn.style.color = '#d97706';
+      warn.style.fontSize = '1.1em';
+      warn.style.marginLeft = '8px';
+      warn.style.cursor = 'pointer';
+      setTooltip(warn, 'API 密钥仅保存在本地，请妥善保管，避免泄露。');
+      setting.settingEl.appendChild(warn);
       setting.addButton(btn => {
         btn.setButtonText('测试密钥').onClick(async () => {
           this.testResult = '测试中...';
