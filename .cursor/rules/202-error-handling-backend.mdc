@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: "后端应用程序的错误处理策略和规范。"
+globs:
+  - "server/**/*.ts"
+  - "src/server/**/*.ts"
+  - "pages/api/**/*.ts"
+  - "app/api/**/*.ts"
+alwaysApply: false # Auto Attached
+---
+
+# 后端错误处理规范
+
+- **`try-catch` 块**: 对所有可能失败的操作（如数据库查询、文件系统操作、外部 API 调用）使用 `try-catch` 块进行包裹。
+- **自定义错误类**:
+    - 创建继承自原生 `Error` 类的自定义错误类，以表示应用程序中特定类型的错误。例如：
+      `class NotFoundError extends Error { constructor(message) { super(message); this.name = "NotFoundError"; this.statusCode = 404; } }`
+      `class ValidationError extends Error { constructor(message, errors) { super(message); this.name = "ValidationError"; this.statusCode = 400; this.errors = errors; } }`
+    - 这有助于在错误处理中间件中根据错误类型进行不同的处理。
+- **标准化的错误响应**:
+    - API 端点应返回统一结构的错误响应体。例如：
+      `{ "success": false, "error": { "type": "ValidationError", "message": "Input validation failed", "details": [ { "field": "email", "message": "Email is required" } ] } }`
+      或对于一般错误：
+      `{ "success": false, "error": { "type": "InternalServerError", "message": "An unexpected error occurred." } }`
+- **日志记录**:
+    - 使用项目指定的日志库（如 Winston, Pino）记录错误。
+    - 日志内容应包含足够上下文信息，如：时间戳、错误级别、错误消息、堆栈跟踪 (stack trace)、请求 ID (request ID)、用户 ID (如果适用)、请求参数 (注意脱敏)。
+- **错误处理中间件 (Express.js 示例)**:
+    - 在 Express.js (或类似框架如 NestJS) 应用中，注册一个全局错误处理中间件，放在所有其他路由和中间件之后。
+      `app.use((err, req, res, next) => {... });`
+- **Next.js API 路由错误处理**:
+    - 在 Next.js API 路由中，确保使用 `res.status(statusCode).json(errorPayload)` 来发送错误响应。
+    - 可以在每个 API 路由处理函数中使用 `try-catch`，或者创建一个高阶函数 (Higher-Order Function) 来封装通用的错误处理逻辑。
+- **避免暴露敏感信息**: 错误响应不应包含敏感的系统内部信息或原始错误堆栈（除非在开发模式下用于调试）。

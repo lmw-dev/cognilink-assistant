@@ -1,0 +1,39 @@
+---
+description: 
+globs: src/service/**/*.ts,src/models/**/*.ts
+alwaysApply: false
+---
+---
+description: "Node.js 后端 API (特别是独立于 Next.js API 路由的服务，或对 Next.js API 路由的更细致指导) 的结构和编码标准。"
+globs:
+  - "server/**/*.ts" # 假设独立 Node.js 后端的根目录是 'server'
+  - "src/server/**/*.ts"
+  - "pages/api/**/*.ts" # 也可用于细化 Next.js API 路由
+  - "app/api/**/*.ts"   # 也可用于细化 Next.js App Router API 路由
+alwaysApply: false # Auto Attached
+---
+
+# Node.js API 端点结构
+
+- **路由组织**:
+    - API 路由应按资源进行组织。例如，用户相关的端点放在 `/users` 路径下，产品相关的放在 `/products` 路径下。
+    - 在文件系统中，可以体现为 `server/routes/userRoutes.ts`, `server/routes/productRoutes.ts`。
+- **请求处理函数 (Route Handlers)**:
+    - 保持请求处理函数（控制器）的职责单一和轻量化。其主要任务是：
+        1.  **输入验证**: 使用 Zod, Joi, express-validator 等库严格验证请求参数 (query, params, body)。
+        2.  **业务逻辑调用**: 调用服务层 (Service Layer) 的相应方法来执行核心业务逻辑。
+        3.  **响应格式化**: 根据业务逻辑的执行结果，构造并发送 HTTP 响应。
+- **服务层 (Service Layer)**:
+    - 将核心业务逻辑封装在独立的服务层模块中。例如，`server/services/userService.ts`。
+    - 服务层不应直接处理 HTTP 请求和响应对象，应保持与框架无关。
+- **数据访问层 (Data Access Layer / Repository Pattern)**:
+    - (可选，推荐用于复杂应用) 将数据库交互逻辑封装在数据访问层或使用仓储模式。例如，`server/repositories/userRepository.ts`。
+- **异步操作**:
+    - 所有涉及 I/O 的异步操作（如数据库查询、外部 API 调用）必须使用 `async/await` 语法糖，并确保返回 Promises [7]。
+- **错误处理**:
+    - 实现集中的错误处理中间件来捕获和处理应用中未被捕获的错误 [2]。
+    - 在路由处理函数和服务层中，对于可预期的错误，应抛出自定义的、具有明确语义的错误对象。
+- **依赖注入 (Dependency Injection)**:
+    - (推荐用于大型应用) 考虑使用依赖注入容器（如 InversifyJS, NestJS DI）来管理服务和依赖项，以提高代码的可测试性和可维护性。
+- **Next.js API 路由特定注意**:
+    - 对于 Next.js API 路由 (`pages/api` 或 `app/api`)，虽然结构可能更扁平，但仍应遵循逻辑分离的原则，可以将复杂逻辑提取到 `lib/` 或 `services/` 目录下的辅助函数或服务中。
