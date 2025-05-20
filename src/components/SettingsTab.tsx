@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, setTooltip, Notice } from 'obsidian';
+import { App, PluginSettingTab, Setting, setTooltip, Notice, setIcon } from 'obsidian';
 import CogniLinkPlugin from '../main';
 import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing } from '../types/settings';
 import { AnthropicProvider } from '../services/AnthropicProvider';
@@ -93,14 +93,15 @@ export class SettingsTab extends PluginSettingTab {
               this.settings.ai.anthropicApiKey = value;
               await this.plugin.saveSettings();
             });
+          // toggle icon
           const toggleBtn = document.createElement('button');
           toggleBtn.type = 'button';
-          toggleBtn.textContent = showAnthropicKey ? '隐藏' : '显示';
+          setIcon(toggleBtn, showAnthropicKey ? 'eye-off' : 'eye');
           toggleBtn.style.marginLeft = '8px';
           toggleBtn.onclick = () => {
             showAnthropicKey = !showAnthropicKey;
             text.inputEl.type = showAnthropicKey ? 'text' : 'password';
-            toggleBtn.textContent = showAnthropicKey ? '隐藏' : '显示';
+            setIcon(toggleBtn, showAnthropicKey ? 'eye-off' : 'eye');
           };
           text.inputEl.parentElement?.appendChild(toggleBtn);
         });
@@ -172,12 +173,26 @@ export class SettingsTab extends PluginSettingTab {
             .setValue(this.settings.ai.anthropicEndpoint || '')
             .onChange(async (value) => {
               if (!/^https?:\/\//.test(value)) {
-                new Notice('Endpoint 必须以 http:// 或 https:// 开头');
+                text.inputEl.style.borderColor = 'red';
+                setTooltip(text.inputEl, 'Endpoint 必须以 http:// 或 https:// 开头');
                 return;
+              } else {
+                text.inputEl.style.borderColor = '';
+                setTooltip(text.inputEl, '');
               }
               this.settings.ai.anthropicEndpoint = value;
               await this.plugin.saveSettings();
             });
+          text.inputEl.oninput = () => {
+            const value = text.inputEl.value;
+            if (!/^https?:\/\//.test(value)) {
+              text.inputEl.style.borderColor = 'red';
+              setTooltip(text.inputEl, 'Endpoint 必须以 http:// 或 https:// 开头');
+            } else {
+              text.inputEl.style.borderColor = '';
+              setTooltip(text.inputEl, '');
+            }
+          };
           // 重置按钮
           const resetBtn = document.createElement('button');
           resetBtn.textContent = '重置为默认';
@@ -205,14 +220,15 @@ export class SettingsTab extends PluginSettingTab {
               this.settings.ai.openAIApiKey = value;
               await this.plugin.saveSettings();
             });
+          // toggle icon
           const toggleBtn = document.createElement('button');
           toggleBtn.type = 'button';
-          toggleBtn.textContent = showOpenAIKey ? '隐藏' : '显示';
+          setIcon(toggleBtn, showOpenAIKey ? 'eye-off' : 'eye');
           toggleBtn.style.marginLeft = '8px';
           toggleBtn.onclick = () => {
             showOpenAIKey = !showOpenAIKey;
             text.inputEl.type = showOpenAIKey ? 'text' : 'password';
-            toggleBtn.textContent = showOpenAIKey ? '隐藏' : '显示';
+            setIcon(toggleBtn, showOpenAIKey ? 'eye-off' : 'eye');
           };
           text.inputEl.parentElement?.appendChild(toggleBtn);
         });
@@ -284,12 +300,26 @@ export class SettingsTab extends PluginSettingTab {
             .setValue(this.settings.ai.openAIEndpoint || '')
             .onChange(async (value) => {
               if (!/^https?:\/\//.test(value)) {
-                new Notice('Endpoint 必须以 http:// 或 https:// 开头');
+                text.inputEl.style.borderColor = 'red';
+                setTooltip(text.inputEl, 'Endpoint 必须以 http:// 或 https:// 开头');
                 return;
+              } else {
+                text.inputEl.style.borderColor = '';
+                setTooltip(text.inputEl, '');
               }
               this.settings.ai.openAIEndpoint = value;
               await this.plugin.saveSettings();
             });
+          text.inputEl.oninput = () => {
+            const value = text.inputEl.value;
+            if (!/^https?:\/\//.test(value)) {
+              text.inputEl.style.borderColor = 'red';
+              setTooltip(text.inputEl, 'Endpoint 必须以 http:// 或 https:// 开头');
+            } else {
+              text.inputEl.style.borderColor = '';
+              setTooltip(text.inputEl, '');
+            }
+          };
           // 重置按钮
           const resetBtn = document.createElement('button');
           resetBtn.textContent = '重置为默认';
