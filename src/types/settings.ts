@@ -51,6 +51,10 @@ export interface RAGSettings {
   dedupThreshold?: number;
   promptTemplates?: PromptTemplate[];
   defaultPromptTemplateId?: string;
+  originality?: {
+    threshold: number;
+    granularity: 'paragraph' | 'sentence';
+  };
 }
 
 export interface Settings {

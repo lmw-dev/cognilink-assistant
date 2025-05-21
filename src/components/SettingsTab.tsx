@@ -482,6 +482,34 @@ export class SettingsTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    // === 原创性检测参数设置 ===
+    containerEl.createEl('h3', { text: '原创性检测' });
+    if (!this.settings.rag) this.settings.rag = {};
+    if (!this.settings.rag.originality) this.settings.rag.originality = { threshold: 0.8, granularity: 'paragraph' };
+    const originality = this.settings.rag.originality;
+    new Setting(containerEl)
+      .setName('相似度阈值')
+      .setDesc('相似度超过该值将高亮（0.7~0.99）')
+      .addSlider(slider => slider
+        .setLimits(0.7, 0.99, 0.01)
+        .setValue(originality.threshold)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          originality.threshold = value;
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl)
+      .setName('检测粒度')
+      .setDesc('选择检测粒度')
+      .addDropdown(dropdown => dropdown
+        .addOption('paragraph', '段落')
+        .addOption('sentence', '句子')
+        .setValue(originality.granularity)
+        .onChange(async (value) => {
+          originality.granularity = value as 'paragraph' | 'sentence';
+          await this.plugin.saveSettings();
+        }));
+
     // === Prompt 模板管理 ===
     containerEl.createEl('h3', { text: 'Prompt 模板管理' });
     const rag = this.settings.rag ?? (this.settings.rag = {});

@@ -15,6 +15,7 @@ import { MarkdownView, TFile, Modal, App } from 'obsidian';
 import { RAGService } from './services/RAGService';
 import { RAGResultModal } from './components/RAGResultModal';
 import { PromptTemplateService } from './services/PromptTemplateService';
+import { OriginalityService, OriginalityResult } from './services/OriginalityService';
 
 // Define the chat icon
 const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -315,34 +316,114 @@ export default class CogniLinkPlugin extends Plugin {
 class PreviewModal extends Modal {
   private content: string;
   private onInsert: (content: string, insertToNewNote: boolean) => void;
-  private textarea: HTMLTextAreaElement;
+  private originalityService: OriginalityService;
+  private originalityResults: OriginalityResult[] = [];
+  private onlyShowHighlight: boolean = false;
+  private threshold: number;
+  private granularity: 'paragraph' | 'sentence';
   constructor(app: App, content: string, onInsert: (content: string, insertToNewNote: boolean) => void) {
     super(app);
     this.content = content;
     this.onInsert = onInsert;
+    // 获取依赖
+    const plugin = (window as any).plugin;
+    this.originalityService = new OriginalityService(plugin.embeddingService);
+    const settings = plugin.settings;
+    this.threshold = settings.rag?.originality?.threshold ?? 0.8;
+    this.granularity = settings.rag?.originality?.granularity ?? 'paragraph';
   }
-  onOpen() {
+  async onOpen() {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl('h2', { text: '生成结果预览' });
-    this.textarea = contentEl.createEl('textarea');
-    this.textarea.style.width = '100%';
-    this.textarea.style.height = '300px';
-    this.textarea.value = this.content;
+    // 检测区
+    const originalityDiv = contentEl.createDiv({ cls: 'originality-check-bar' });
+    const checkBtn = originalityDiv.createEl('button', { text: '重新检测' });
+    const toggleBtn = originalityDiv.createEl('button', { text: '只看高亮' });
+    let infoSpan = originalityDiv.createEl('span', { text: '' });
+    checkBtn.onclick = async () => {
+      infoSpan.textContent = '检测中...';
+      await this.runOriginalityCheck();
+      infoSpan.textContent = `检测完成，共${this.originalityResults.filter(r => r.similarity >= this.threshold).length}段高亮`;
+      this.renderContent();
+    };
+    toggleBtn.onclick = () => {
+      this.onlyShowHighlight = !this.onlyShowHighlight;
+      toggleBtn.textContent = this.onlyShowHighlight ? '显示全部' : '只看高亮';
+      this.renderContent();
+    };
+    // 检测并渲染
+    infoSpan.textContent = '检测中...';
+    await this.runOriginalityCheck();
+    infoSpan.textContent = `检测完成，共${this.originalityResults.filter(r => r.similarity >= this.threshold).length}段高亮`;
+    this.renderContent();
     // 按钮区
     const btnRow = contentEl.createDiv({ cls: 'theme-modal-btn-row' });
     const insertBtn = btnRow.createEl('button', { text: '插入到当前笔记', cls: 'mod-cta' });
     insertBtn.onclick = () => {
-      this.onInsert(this.textarea.value, false);
+      // 拼接当前高亮内容插入
+      const text = this.originalityResults.map(r => r.text).join(this.granularity === 'sentence' ? '' : '\n\n');
+      this.onInsert(text, false);
       this.close();
     };
     const newNoteBtn = btnRow.createEl('button', { text: '插入到新建笔记' });
     newNoteBtn.onclick = () => {
-      this.onInsert(this.textarea.value, true);
+      const text = this.originalityResults.map(r => r.text).join(this.granularity === 'sentence' ? '' : '\n\n');
+      this.onInsert(text, true);
       this.close();
     };
     const cancelBtn = btnRow.createEl('button', { text: '取消' });
     cancelBtn.onclick = () => this.close();
+  }
+  async runOriginalityCheck() {
+    // 按粒度切分
+    let segments: string[];
+    if (this.granularity === 'sentence') {
+      segments = this.content.split(/(?<=[。！？.!?])\s*/).map(t => t.trim()).filter(Boolean);
+    } else {
+      segments = this.content.split(/\n{2,}/).map(t => t.trim()).filter(Boolean);
+    }
+    this.originalityResults = await this.originalityService.checkOriginality(this.content, this.threshold);
+  }
+  renderContent() {
+    const { contentEl } = this;
+    // 移除旧的高亮区块
+    contentEl.querySelectorAll('.originality-preview').forEach(el => el.remove());
+    let displayResults = this.originalityResults;
+    if (this.onlyShowHighlight) {
+      displayResults = displayResults.filter(r => r.similarity >= this.threshold);
+    }
+    const previewDiv = contentEl.createDiv({ cls: 'originality-preview' });
+    previewDiv.style.background = '#f8fafc';
+    previewDiv.style.border = '1px solid #e5e7eb';
+    previewDiv.style.borderRadius = '8px';
+    previewDiv.style.padding = '12px';
+    previewDiv.style.marginTop = '10px';
+    previewDiv.style.maxHeight = '260px';
+    previewDiv.style.overflow = 'auto';
+    previewDiv.style.fontSize = '1em';
+    displayResults.forEach((r, idx) => {
+      const para = previewDiv.createDiv();
+      para.style.whiteSpace = 'pre-line';
+      para.style.margin = '6px 0';
+      para.textContent = r.text;
+      if (r.similarity >= this.threshold) {
+        para.style.background = '#fef3c7';
+        para.style.borderRadius = '4px';
+        para.style.position = 'relative';
+        para.style.cursor = 'pointer';
+        para.onmouseenter = () => {
+          para.style.background = '#fde68a';
+        };
+        para.onmouseleave = () => {
+          para.style.background = '#fef3c7';
+        };
+        para.onclick = (e) => {
+          new Notice(`相似度：${(r.similarity * 100).toFixed(1)}%，来源：${r.sourceTitle}`);
+        };
+        para.setAttr('title', `相似度：${(r.similarity * 100).toFixed(1)}%，来源：${r.sourceTitle}`);
+      }
+    });
   }
 }
 

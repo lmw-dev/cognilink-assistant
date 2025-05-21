@@ -176,4 +176,11 @@ export class EmbeddingService {
     }
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
+
+  /**
+   * 生成任意文本的 embedding
+   */
+  public async generateEmbeddingForText(text: string): Promise<number[]> {
+    return this.aiService.generateEmbeddings(text);
+  }
 }
