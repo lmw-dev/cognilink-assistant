@@ -29,6 +29,8 @@ export class KeyboardManager {
    */
   private initializeKeyboardNavigation(): void {
     document.addEventListener('keydown', (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName?.toLowerCase();
+      const isInput = tag === 'input' || tag === 'textarea' || (e.target as HTMLElement).isContentEditable;
       if (e.key === 'Tab') {
         if (e.shiftKey) {
           this.focusPrevious();
@@ -43,8 +45,8 @@ export class KeyboardManager {
         this.handleEscape();
       }
 
-      // 空格键或回车键激活当前焦点元素
-      if ((e.key === ' ' || e.key === 'Enter') && document.activeElement instanceof HTMLElement) {
+      // 只在非输入区域时处理空格/回车
+      if (!isInput && (e.key === ' ' || e.key === 'Enter') && document.activeElement instanceof HTMLElement) {
         document.activeElement.click();
         e.preventDefault();
       }

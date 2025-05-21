@@ -136,7 +136,9 @@ export class AccessibilityManager {
 
         // 添加键盘事件监听器
         element.addEventListener('keydown', (e: KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          const tag = (e.target as HTMLElement).tagName?.toLowerCase();
+          const isInput = tag === 'input' || tag === 'textarea' || (e.target as HTMLElement).isContentEditable;
+          if (!isInput && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
             element.click();
           }

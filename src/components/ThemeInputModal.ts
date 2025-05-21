@@ -27,18 +27,23 @@ export class ThemeInputModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl('h2', { text: '主题驱动原创文档生成' });
-    // 主题输入
-    new Setting(contentEl)
-      .setName('主题')
-      .setDesc('请输入要生成原创文档的主题')
-      .addText((text) => {
-        text.setPlaceholder('如：人工智能伦理')
-          .setValue(this.theme)
-          .onChange((v) => {
-            this.theme = v;
-          });
-        this.inputEl = text.inputEl;
-      });
+    // 主题输入（自定义 textarea 替换 Setting.addText）
+    const themeLabel = contentEl.createDiv({ cls: 'setting-item' });
+    themeLabel.createDiv({ cls: 'setting-item-name', text: '主题' });
+    themeLabel.createDiv({ cls: 'setting-item-description', text: '请输入要生成原创文档的主题，可包含空格' });
+    const textarea = themeLabel.createEl('textarea', {
+      cls: 'theme-input-textarea',
+      placeholder: '如：人工智能伦理',
+      text: this.theme
+    });
+    textarea.rows = 2;
+    textarea.style.width = '100%';
+    textarea.style.fontSize = '1em';
+    textarea.style.marginTop = '4px';
+    textarea.oninput = (e) => {
+      this.theme = (e.target as HTMLTextAreaElement).value;
+    };
+    this.inputEl = textarea as unknown as HTMLInputElement;
     // 是否包含当前笔记内容
     new Setting(contentEl)
       .setName('包含当前笔记内容')

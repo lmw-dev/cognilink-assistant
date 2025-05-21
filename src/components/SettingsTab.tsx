@@ -1,10 +1,12 @@
 import { App, PluginSettingTab, Setting, setTooltip, Notice, setIcon } from 'obsidian';
 import CogniLinkPlugin from '../main';
-import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing } from '../types/settings';
+import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing, PromptTemplate, DEFAULT_PROMPT_TEMPLATES } from '../types/settings';
 import { AnthropicProvider } from '../services/AnthropicProvider';
 import { OpenAIProvider } from '../services/OpenAIProvider';
 import { AI_MODELS } from '../constants/ai-models';
 import { ConfigurationError, APIError, NetworkError } from '../services/AIService';
+import { Modal } from 'obsidian';
+import { PromptTemplateService } from '../services/PromptTemplateService';
 
 export class SettingsTab extends PluginSettingTab {
   plugin: CogniLinkPlugin;
@@ -478,6 +480,87 @@ export class SettingsTab extends PluginSettingTab {
           if (!this.settings.rag) this.settings.rag = { topK: 8, threshold: 0.7, dedupThreshold: 0.98 };
           this.settings.rag.dedupThreshold = Number(value);
           await this.plugin.saveSettings();
+        }));
+
+    // === Prompt 模板管理 ===
+    containerEl.createEl('h3', { text: 'Prompt 模板管理' });
+    const rag = this.settings.rag ?? (this.settings.rag = {});
+    if (!rag.promptTemplates) rag.promptTemplates = DEFAULT_PROMPT_TEMPLATES.slice();
+    if (!rag.defaultPromptTemplateId) rag.defaultPromptTemplateId = 'default';
+    rag.promptTemplates.forEach((tpl, idx) => {
+      new Setting(containerEl)
+        .setName(tpl.name)
+        .setDesc(tpl.content.slice(0, 60) + '...')
+        .addButton(btn => btn
+          .setButtonText('编辑')
+          .onClick(() => {
+            const modal = new Modal(this.app);
+            modal.titleEl.setText('编辑模板');
+            const textarea = modal.contentEl.createEl('textarea');
+            textarea.value = tpl.content;
+            textarea.rows = 8;
+            textarea.style.width = '100%';
+            modal.contentEl.createEl('br');
+            new Setting(modal.contentEl)
+              .addButton(b => b.setButtonText('保存').onClick(async () => {
+                tpl.content = textarea.value;
+                await this.plugin.saveSettings();
+                modal.close();
+                this.display();
+              }))
+              .addButton(b => b.setButtonText('取消').onClick(() => modal.close()));
+            modal.open();
+          }))
+        .addButton(btn => btn
+          .setButtonText('删除')
+          .setWarning()
+          .onClick(async () => {
+            rag.promptTemplates!.splice(idx, 1);
+            await this.plugin.saveSettings();
+            this.display();
+          }))
+        .addExtraButton(btn => {
+          btn.setIcon('star');
+          btn.setTooltip('设为默认');
+          if (rag.defaultPromptTemplateId === tpl.id) btn.extraSettingsEl.addClass('is-active');
+          btn.onClick(async () => {
+            rag.defaultPromptTemplateId = tpl.id;
+            await this.plugin.saveSettings();
+            this.display();
+          });
+        });
+    });
+    new Setting(containerEl)
+      .addButton(btn => btn
+        .setButtonText('新增模板')
+        .onClick(() => {
+          const modal = new Modal(this.app);
+          modal.titleEl.setText('新增模板');
+          const nameInput = modal.contentEl.createEl('input', { type: 'text', placeholder: '模板名称' });
+          modal.contentEl.createEl('br');
+          const textarea = modal.contentEl.createEl('textarea');
+          textarea.rows = 8;
+          textarea.style.width = '100%';
+          modal.contentEl.createEl('br');
+          new Setting(modal.contentEl)
+            .addButton(b => b.setButtonText('添加').onClick(async () => {
+              const id = Date.now().toString();
+              rag.promptTemplates!.push({ id, name: nameInput.value || '新模板', content: textarea.value });
+              await this.plugin.saveSettings();
+              modal.close();
+              this.display();
+            }))
+            .addButton(b => b.setButtonText('取消').onClick(() => modal.close()));
+          modal.open();
+        }));
+    new Setting(containerEl)
+      .addButton(btn => btn
+        .setButtonText('恢复默认模板')
+        .onClick(async () => {
+          rag.promptTemplates = DEFAULT_PROMPT_TEMPLATES.slice();
+          rag.defaultPromptTemplateId = 'default';
+          await this.plugin.saveSettings();
+          this.display();
         }));
   }
 }

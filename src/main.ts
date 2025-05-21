@@ -1,5 +1,5 @@
 import { Plugin, Notice, addIcon, WorkspaceLeaf, ViewState } from 'obsidian';
-import { PluginSettings, DEFAULT_SETTINGS } from './types/settings';
+import { PluginSettings, DEFAULT_SETTINGS, DEFAULT_PROMPT_TEMPLATES } from './types/settings';
 import { SettingsTab } from './components/SettingsTab';
 import { SettingsManager } from './services/SettingsManager';
 import { SettingsStorage } from './services/SettingsStorage';
@@ -14,6 +14,7 @@ import { ThemeInputModal } from './components/ThemeInputModal';
 import { MarkdownView, TFile, Modal, App } from 'obsidian';
 import { RAGService } from './services/RAGService';
 import { RAGResultModal } from './components/RAGResultModal';
+import { PromptTemplateService } from './services/PromptTemplateService';
 
 // Define the chat icon
 const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -250,7 +251,6 @@ export default class CogniLinkPlugin extends Plugin {
       onSubmit: async (theme, includeContext, close, setLoading, setError) => {
         try {
           setLoading(true);
-          // 组装上下文
           let context = '';
           if (includeContext) {
             const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -258,18 +258,24 @@ export default class CogniLinkPlugin extends Plugin {
               context = activeView.editor.getValue();
             }
           }
-          // === 新增：RAG 检索 ===
-          // 1. 检索与主题相关的笔记内容
           const relatedNotes = await this.embeddingService.findRelevantNotes(theme, 5);
-          // 2. 拼接相关笔记内容
           const ragContext = relatedNotes.map(n => `【${n.title}】\n${n.content}`).join('\n\n');
-          // 3. 组装最终上下文
           const finalContext = (context ? context + '\n\n' : '') + ragContext;
-          // 4. 传递给 LLM
-          const result = await this.aiService.generateOriginalDoc(theme, finalContext);
+          // === 新增：Prompt 模板渲染 ===
+          const rag = this.settings.rag ?? (this.settings.rag = {});
+          const promptService = new PromptTemplateService(
+            rag.promptTemplates || DEFAULT_PROMPT_TEMPLATES,
+            rag.defaultPromptTemplateId || 'default'
+          );
+          const template = promptService.getDefault();
+          const prompt = promptService.render(template, {
+            theme,
+            context: finalContext,
+            pinned: '' // 可后续支持钉住内容
+          });
+          const result = await this.aiService.generateOriginalDoc(theme, prompt);
           setLoading(false);
           close();
-          // 弹出预览与插入
           new PreviewModal(this.app, result, (finalContent, insertToNewNote) => {
             if (insertToNewNote) {
               this.insertToNewNote(finalContent, theme);

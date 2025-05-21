@@ -39,15 +39,25 @@ export interface AISettings {
   defaultSystemPrompt: string;
 }
 
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  content: string;
+}
+
+export interface RAGSettings {
+  topK?: number;
+  threshold?: number;
+  dedupThreshold?: number;
+  promptTemplates?: PromptTemplate[];
+  defaultPromptTemplateId?: string;
+}
+
 export interface Settings {
   ui: UISettings;
   ai: AISettings;
   shortcuts: Shortcuts;
-  rag?: {
-    topK?: number;
-    threshold?: number;
-    dedupThreshold?: number;
-  };
+  rag?: RAGSettings;
 }
 
 export type PluginSettings = Settings;
@@ -96,3 +106,16 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     dedupThreshold: 0.98
   }
 };
+
+export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
+  {
+    id: 'default',
+    name: '标准结构',
+    content: '请根据主题"${theme}"，结合以下内容：\n${context}\n生成结构清晰、内容丰富的原创文档。'
+  },
+  {
+    id: 'imrad',
+    name: '引言-方法-结果-讨论',
+    content: '# 引言\n${theme}\n\n# 方法\n${context}\n\n# 结果\n${pinned}\n\n# 讨论\n请基于以上内容生成完整文档。'
+  }
+];
