@@ -2,6 +2,7 @@ import { AIProvider } from './AIProvider';
 import { Message, MessageRole } from '../types/message';
 import { requestUrl } from 'obsidian';
 import { APIError, NetworkError } from './AIService';
+import { Logger } from '../utils/logger';
 
 export interface OpenAIProviderOptions {
   apiKey: string;
@@ -14,9 +15,11 @@ export interface OpenAIProviderOptions {
 
 export class OpenAIProvider implements AIProvider {
   private options: OpenAIProviderOptions;
+  private logger: Logger;
 
   constructor(options: OpenAIProviderOptions) {
     this.options = options;
+    this.logger = new Logger('OpenAIProvider');
   }
 
   async sendMessage(message: Message): Promise<Message> {
@@ -81,14 +84,19 @@ export class OpenAIProvider implements AIProvider {
     console.log('[OpenAIProvider][generateEmbeddings] headers:', headers);
     console.log('[OpenAIProvider][generateEmbeddings] body:', body);
     try {
-      const response = await requestUrl({
-        url,
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        throw: false,
-      });
+      const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new APIError('OpenAI Embedding API 超时（30秒）')), 30000));
+      const response = await Promise.race([
+        requestUrl({
+          url,
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          throw: false,
+        }),
+        timeoutPromise
+      ]);
       if (response.status !== 200) {
+        this.logger.error('OpenAI Embedding API error:', new Error(`${response.status} ${response.text}`));
         throw new APIError(`OpenAI Embedding API error: ${response.status} ${response.text}`);
       }
       const data = response.json;
@@ -96,8 +104,10 @@ export class OpenAIProvider implements AIProvider {
       if (Array.isArray(embedding)) {
         return embedding;
       }
+      this.logger.error('OpenAI Embedding API: No embedding returned', new Error(JSON.stringify(data)));
       throw new APIError('OpenAI Embedding API: No embedding returned');
     } catch (err: any) {
+      this.logger.error('generateEmbeddings error:', err instanceof Error ? err : new Error(String(err)));
       if (err instanceof APIError) throw err;
       if (err.message && err.message.includes('network')) {
         throw new NetworkError(`OpenAI 网络错误: ${err.message}`);

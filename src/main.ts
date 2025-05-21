@@ -12,6 +12,8 @@ import { AIService } from './services/AIService';
 import { NoteMetaService } from './services/NoteMetaService';
 import { ThemeInputModal } from './components/ThemeInputModal';
 import { MarkdownView, TFile, Modal, App } from 'obsidian';
+import { RAGService } from './services/RAGService';
+import { RAGResultModal } from './components/RAGResultModal';
 
 // Define the chat icon
 const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -28,6 +30,7 @@ export default class CogniLinkPlugin extends Plugin {
   accessibilityManager: AccessibilityManager;
   embeddingService: EmbeddingService;
   aiService: AIService;
+  ragService: RAGService;
 
   async onload() {
     try {
@@ -157,6 +160,22 @@ export default class CogniLinkPlugin extends Plugin {
       });
       console.log('CogniLink plugin loaded successfully');
       new Notice('CogniLink 插件已加载');
+
+      this.ragService = new RAGService(this.embeddingService, this.aiService);
+      // @ts-expect-error: Obsidian 插件全局挂载 ragService 实例，类型检查可忽略
+      window.ragService = this.ragService;
+      // @ts-expect-error: Obsidian 插件全局挂载 RAGService 类，便于控制台 new
+      window.RAGService = RAGService;
+      // @ts-expect-error: Obsidian 插件全局挂载 plugin 实例，便于控制台调试
+      window.plugin = this;
+      // 注册 RAG 结果展示命令
+      this.addCommand({
+        id: 'show-rag-result-modal',
+        name: '智能检索与内容整合',
+        callback: () => {
+          new RAGResultModal(this.app, this.ragService).open();
+        }
+      });
     } catch (error) {
       console.error('[main] onload error:', error);
       new Notice('CogniLink 插件加载失败: ' + error.message);
@@ -239,8 +258,15 @@ export default class CogniLinkPlugin extends Plugin {
               context = activeView.editor.getValue();
             }
           }
-          // 调用 AI 生成（mock，后续替换为真实实现）
-          const result = await this.aiService.generateOriginalDoc(theme, context);
+          // === 新增：RAG 检索 ===
+          // 1. 检索与主题相关的笔记内容
+          const relatedNotes = await this.embeddingService.findRelevantNotes(theme, 5);
+          // 2. 拼接相关笔记内容
+          const ragContext = relatedNotes.map(n => `【${n.title}】\n${n.content}`).join('\n\n');
+          // 3. 组装最终上下文
+          const finalContext = (context ? context + '\n\n' : '') + ragContext;
+          // 4. 传递给 LLM
+          const result = await this.aiService.generateOriginalDoc(theme, finalContext);
           setLoading(false);
           close();
           // 弹出预览与插入
@@ -313,15 +339,6 @@ class PreviewModal extends Modal {
     cancelBtn.onclick = () => this.close();
   }
 }
-
-// mock aiService.generateOriginalDoc
-AIService.prototype.generateOriginalDoc = async function(theme: string, context: string): Promise<string> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(`# ${theme}\n\n这是根据主题"${theme}"${context ? '并结合当前笔记内容' : ''}生成的原创文档示例。\n\n- 亮点1\n- 亮点2\n\n> 生成内容仅供参考。`);
-    }, 1800);
-  });
-};
 
 // 使用 CommonJS 导出以确保 Obsidian 能加载插件
 module.exports = CogniLinkPlugin;

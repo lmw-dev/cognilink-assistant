@@ -7,6 +7,7 @@ import { AIProvider } from './AIProvider';
 import { AnthropicProvider, AnthropicProviderOptions } from './AnthropicProvider';
 import { LocalProvider } from './LocalProvider';
 import { OpenAIProvider, OpenAIProviderOptions } from './OpenAIProvider';
+import { request } from 'obsidian';
 
 export class AIServiceError extends Error {
   constructor(message: string) {
@@ -136,16 +137,98 @@ export class AIService {
   }
 
   async generateEmbeddings(text: string): Promise<number[]> {
-    console.log('[AIService] generateEmbeddings called with text length:', text.length);
-    
-    return this.provider.generateEmbeddings(text);
+    try {
+      console.log('[AIService] generateEmbeddings called with text length:', text.length);
+      return await this.provider.generateEmbeddings(text);
+    } catch (err: any) {
+      this.logger.error('generateEmbeddings error:', err);
+      throw err;
+    }
   }
 
   /**
-   * 根据主题和上下文生成原创文档（mock，后续替换为真实实现）
+   * 根据主题和上下文生成原创文档（自动分流到当前 Provider）
    */
   async generateOriginalDoc(theme: string, context: string): Promise<string> {
-    // 具体实现由 main.ts mock，或后续补充
-    return '';
+    const { provider, openAIApiKey, openAIEndpoint, anthropicApiKey, anthropicEndpoint, model, maxTokens, temperature, defaultSystemPrompt } = this.settings.ai;
+
+    const prompt = `请根据主题"${theme}"${context ? '，并结合以下内容：\n' + context : ''}，生成一篇结构清晰、内容丰富的原创文档。`;
+    console.log('[AIService] generateOriginalDoc called', { provider, model, prompt, context });
+
+    if (provider === 'openai') {
+      if (!openAIApiKey) throw new ConfigurationError('OpenAI API Key 未配置');
+      let endpoint = openAIEndpoint?.trim() || 'https://api.openai.com/v1';
+      endpoint = endpoint.replace(/\/+$/, '');
+      endpoint += '/chat/completions';
+      const body = {
+        model: model || 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: defaultSystemPrompt || '你是专业的中文文档写作助手。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: temperature ?? 0.7,
+        max_tokens: maxTokens ?? 2048
+      };
+      console.log('[AIService] OpenAI request', { endpoint, body });
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openAIApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        console.log('[AIService] fetch response', data);
+        if (!res.ok) {
+          let userMsg = 'OpenAI 生成失败';
+          if (data?.error) {
+            if (res.status === 429 || data.error.code === 'rate_limit_exceeded') {
+              userMsg = 'OpenAI 速率/额度限制：' + (data.error.message || '请稍后重试或降低 max_tokens。');
+            } else if (data.error.message) {
+              userMsg = 'OpenAI 错误：' + data.error.message;
+            }
+          }
+          throw new APIError(userMsg);
+        }
+        return data.choices?.[0]?.message?.content?.trim() || '生成失败';
+      } catch (err) {
+        console.error('[AIService] fetch error', err);
+        throw new APIError(err?.message || 'OpenAI 生成失败');
+      }
+    } else if (provider === 'anthropic') {
+      if (!anthropicApiKey) throw new ConfigurationError('Anthropic API Key 未配置');
+      const endpoint = (anthropicEndpoint || 'https://api.anthropic.com/v1/messages').replace(/\/+$/, '') + '/messages';
+      try {
+        const res = await request({
+          url: endpoint,
+          method: 'POST',
+          headers: {
+            'x-api-key': anthropicApiKey,
+            'content-type': 'application/json',
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify({
+            model: model || 'claude-3-haiku-20240307',
+            max_tokens: maxTokens ?? 2048,
+            temperature: temperature ?? 0.7,
+            system: defaultSystemPrompt || '你是专业的中文文档写作助手。',
+            messages: [
+              { role: 'user', content: prompt }
+            ]
+          })
+        });
+        const data = JSON.parse(res);
+        if (Array.isArray(data.content) && data.content[0]?.text) {
+          return data.content[0].text.trim();
+        }
+        return '生成失败';
+      } catch (err: any) {
+        throw new APIError('Anthropic 生成失败: ' + (err?.message || err));
+      }
+    } else {
+      throw new ConfigurationError('未配置有效的 AI Provider');
+    }
   }
 }

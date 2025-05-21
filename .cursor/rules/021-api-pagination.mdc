@@ -1,0 +1,11 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# API 分页规范
+
+- 列表接口必须支持分页，参数：page（默认1）、pageSize（默认10）
+- 响应结构：{ code, message, data: { list, pagination: { total, current, pageSize, totalPages } } }
+- 必须有分页参数校验，防止超大页码/页数
+- 示例代码见 @005-general-api-design.mdc

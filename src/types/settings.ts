@@ -43,6 +43,11 @@ export interface Settings {
   ui: UISettings;
   ai: AISettings;
   shortcuts: Shortcuts;
+  rag?: {
+    topK?: number;
+    threshold?: number;
+    dedupThreshold?: number;
+  };
 }
 
 export type PluginSettings = Settings;
@@ -84,5 +89,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
       key: 'l',
       modifiers: ['Mod', 'Shift']
     }
+  },
+  rag: {
+    topK: 8,
+    threshold: 0.7,
+    dedupThreshold: 0.98
   }
 };

@@ -446,5 +446,38 @@ export class SettingsTab extends PluginSettingTab {
           this.settings.ui.enableAnimations = value;
           await this.plugin.saveSettings();
         }));
+
+    // === RAG 检索参数设置 ===
+    containerEl.createEl('h3', { text: 'RAG 检索参数' });
+    new Setting(containerEl)
+      .setName('检索数量 (topK)')
+      .setDesc('每次检索返回的笔记数量')
+      .addText(text => text
+        .setValue(String(this.settings.rag?.topK ?? 8))
+        .onChange(async (value) => {
+          if (!this.settings.rag) this.settings.rag = { topK: 8, threshold: 0.7, dedupThreshold: 0.98 };
+          this.settings.rag.topK = Number(value);
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl)
+      .setName('相似度阈值')
+      .setDesc('检索时的相似度阈值，0~1，越高越严格')
+      .addText(text => text
+        .setValue(String(this.settings.rag?.threshold ?? 0.7))
+        .onChange(async (value) => {
+          if (!this.settings.rag) this.settings.rag = { topK: 8, threshold: 0.7, dedupThreshold: 0.98 };
+          this.settings.rag.threshold = Number(value);
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl)
+      .setName('去重阈值')
+      .setDesc('内容去重时的相似度阈值，0~1，越高越严格')
+      .addText(text => text
+        .setValue(String(this.settings.rag?.dedupThreshold ?? 0.98))
+        .onChange(async (value) => {
+          if (!this.settings.rag) this.settings.rag = { topK: 8, threshold: 0.7, dedupThreshold: 0.98 };
+          this.settings.rag.dedupThreshold = Number(value);
+          await this.plugin.saveSettings();
+        }));
   }
 }

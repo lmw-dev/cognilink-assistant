@@ -1,0 +1,13 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# 规则维护指南
+
+- 新增规则：建议用 New Cursor Rule 命令或手动创建 .mdc 文件，命名有语义，补充 description 和 globs
+- 修改规则：需团队同步，重要变更建议发起 PR 并说明影响范围
+- 废弃规则：加 deprecated 标记，保留历史，必要时迁移到 archive 目录
+- 规则内容应聚焦、可组合、可引用示例或模板
+- 规则变更需纳入版本控制，随项目一同维护
+- 鼓励将通用规则抽象为可复用模块，供多项目/团队共享
