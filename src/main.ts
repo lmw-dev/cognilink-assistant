@@ -253,37 +253,42 @@ export default class CogniLinkPlugin extends Plugin {
         try {
           setLoading(true);
           let context = '';
+          let sources: string[] = [];
           if (includeContext) {
             const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
             if (activeView) {
               context = activeView.editor.getValue();
             }
           }
+          // 检索相关内容并组装带引用 context
           const relatedNotes = await this.embeddingService.findRelevantNotes(theme, 5);
-          const ragContext = relatedNotes.map(n => `【${n.title}】\n${n.content}`).join('\n\n');
+          const ragContext = relatedNotes.map((n, i) => `【${i + 1}】${n.content}`).join('\n\n');
+          const sourceList = relatedNotes.map((n, i) => `[${i + 1}] ${n.title} (obsidian://open?path=${encodeURIComponent(n.path)})`);
           const finalContext = (context ? context + '\n\n' : '') + ragContext;
-          // === 新增：Prompt 模板渲染 ===
+          // === 新增：Prompt 模板渲染，要求 LLM 按 [n] 引用 ===
           const rag = this.settings.rag ?? (this.settings.rag = {});
           const promptService = new PromptTemplateService(
             rag.promptTemplates || DEFAULT_PROMPT_TEMPLATES,
             rag.defaultPromptTemplateId || 'default'
           );
           const template = promptService.getDefault();
-          const prompt = promptService.render(template, {
+          const prompt = `${promptService.render(template, {
             theme,
             context: finalContext,
-            pinned: '' // 可后续支持钉住内容
-          });
+            pinned: ''
+          })}\n\n请在正文引用相关内容时加上对应的 [n] 编号，文末不需要重复列出来源。`;
           const result = await this.aiService.generateOriginalDoc(theme, prompt);
           setLoading(false);
           close();
           new PreviewModal(this.app, result, (finalContent, insertToNewNote) => {
+            // 插入时自动追加来源列表
+            const contentWithSources = `${finalContent}\n\n---\n来源：\n${sourceList.map(s => `- ${s}`).join('\n')}`;
             if (insertToNewNote) {
-              this.insertToNewNote(finalContent, theme);
+              this.insertToNewNote(contentWithSources, theme);
             } else {
-              this.insertToCurrentNote(finalContent);
+              this.insertToCurrentNote(contentWithSources);
             }
-          }).open();
+          }, sourceList).open();
         } catch (e) {
           setLoading(false);
           setError(e?.message || '生成失败，请重试');
@@ -321,10 +326,12 @@ class PreviewModal extends Modal {
   private onlyShowHighlight: boolean = false;
   private threshold: number;
   private granularity: 'paragraph' | 'sentence';
-  constructor(app: App, content: string, onInsert: (content: string, insertToNewNote: boolean) => void) {
+  private sources: string[];
+  constructor(app: App, content: string, onInsert: (content: string, insertToNewNote: boolean) => void, sources: string[] = []) {
     super(app);
     this.content = content;
     this.onInsert = onInsert;
+    this.sources = sources;
     // 获取依赖
     const plugin = (window as any).plugin;
     this.originalityService = new OriginalityService(plugin.embeddingService);
