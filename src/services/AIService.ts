@@ -137,10 +137,46 @@ export class AIService {
   }
 
   async generateEmbeddings(text: string): Promise<number[]> {
+    const MAX_SAFE_LENGTH = 4000; // 可根据模型实际 token 限制调整
     try {
-      console.log('[AIService] generateEmbeddings called with text length:', text.length);
+      this.logger.info('[AIService] generateEmbeddings called with text length:', text.length);
       return await this.provider.generateEmbeddings(text);
     } catch (err: any) {
+      // OpenAIProvider 400 context length 超限特殊处理
+      if (typeof err?.message === 'string' && err.message.includes('maximum context length')) {
+        this.logger.warn('[AIService] 捕获到 context 超限错误，自动降级分片重试');
+        // 自动分片递归处理
+        const chunkSize = 2000;
+        if (text.length <= chunkSize) {
+          // 已无法再分片，直接抛出
+          this.logger.error('[AIService] 单片内容仍超长，无法处理');
+          throw err;
+        }
+        // 按 chunkSize 分片
+        const chunks: string[] = [];
+        for (let i = 0; i < text.length; i += chunkSize) {
+          chunks.push(text.slice(i, i + chunkSize));
+        }
+        this.logger.info(`[AIService] 自动降级分片为 ${chunks.length} 片，每片 <= ${chunkSize} 字`);
+        const embeddings: number[][] = [];
+        for (let i = 0; i < chunks.length; i++) {
+          try {
+            embeddings.push(await this.generateEmbeddings(chunks[i]));
+          } catch (e) {
+            this.logger.error(`[AIService] 分片 ${i+1} 生成 embedding 失败`, e);
+          }
+        }
+        if (embeddings.length === 0) throw err;
+        // 均值聚合
+        const dim = embeddings[0].length;
+        const avg: number[] = Array(dim).fill(0);
+        for (const emb of embeddings) {
+          for (let i = 0; i < dim; i++) avg[i] += emb[i];
+        }
+        for (let i = 0; i < dim; i++) avg[i] /= embeddings.length;
+        this.logger.info(`[AIService] 自动降级分片后返回均值 embedding, 分片数: ${embeddings.length}`);
+        return avg;
+      }
       this.logger.error('generateEmbeddings error:', err);
       throw err;
     }

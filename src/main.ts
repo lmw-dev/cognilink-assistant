@@ -249,49 +249,65 @@ export default class CogniLinkPlugin extends Plugin {
     new ThemeInputModal({
       app: this.app,
       initialTheme,
-      onSubmit: async (theme, includeContext, close, setLoading, setError) => {
+      onSubmit: async (theme, includeContext, close, setLoading, setError, mode = 'smart') => {
         try {
           setLoading(true);
           let context = '';
-          let sources: string[] = [];
           if (includeContext) {
             const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
             if (activeView) {
               context = activeView.editor.getValue();
             }
           }
-          // 检索相关内容并组装带引用 context
-          const relatedNotes = await this.embeddingService.findRelevantNotes(theme, 5);
-          const ragContext = relatedNotes.map((n, i) => `【${i + 1}】${n.content}`).join('\n\n');
-          const sourceList = relatedNotes.map((n, i) => `[${i + 1}] ${n.title} (obsidian://open?path=${encodeURIComponent(n.path)})`);
-          const finalContext = (context ? context + '\n\n' : '') + ragContext;
-          // === 新增：Prompt 模板渲染，要求 LLM 按 [n] 引用 ===
-          const rag = this.settings.rag ?? (this.settings.rag = {});
-          const promptService = new PromptTemplateService(
-            rag.promptTemplates || DEFAULT_PROMPT_TEMPLATES,
-            rag.defaultPromptTemplateId || 'default'
-          );
-          const template = promptService.getDefault();
-          const prompt = `${promptService.render(template, {
-            theme,
-            context: finalContext,
-            pinned: ''
-          })}\n\n请在正文引用相关内容时加上对应的 [n] 编号，文末不需要重复列出来源。`;
-          const result = await this.aiService.generateOriginalDoc(theme, prompt);
-          setLoading(false);
-          close();
-          new PreviewModal(this.app, result, (finalContent, insertToNewNote) => {
-            // 插入时自动追加来源列表
-            const contentWithSources = `${finalContent}\n\n---\n来源：\n${sourceList.map(s => `- ${s}`).join('\n')}`;
-            if (insertToNewNote) {
-              this.insertToNewNote(contentWithSources, theme);
-            } else {
-              this.insertToCurrentNote(contentWithSources);
-            }
-          }, sourceList).open();
-        } catch (e) {
-          setLoading(false);
-          setError(e?.message || '生成失败，请重试');
+          if (mode === 'fast') {
+            // 极速生成：只用 LLM
+            const result = await this.aiService.generateOriginalDoc(theme, context);
+            setLoading(false);
+            close();
+            new PreviewModal(this.app, result, (content, insertToNewNote) => {
+              if (insertToNewNote) {
+                this.app.vault.create('新建原创文档.md', content);
+              } else {
+                const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+                if (activeView) {
+                  activeView.editor.replaceRange(content, activeView.editor.getCursor());
+                }
+              }
+            }, []).open();
+          } else {
+            // 智能生成：embedding 检索+引用
+            const relatedNotes = await this.embeddingService.findRelevantNotes(theme, 8);
+            const ragContext = relatedNotes.map((n, i) => `【${i + 1}】${n.content}`).join('\n\n');
+            const sourceList = relatedNotes.map((n, i) => `[${i + 1}] ${n.title} (obsidian://open?path=${encodeURIComponent(n.path)})`);
+            const finalContext = (context ? context + '\n\n' : '') + ragContext;
+            // === Prompt 模板渲染，要求 LLM 按 [n] 引用 ===
+            const rag = this.settings.rag ?? (this.settings.rag = {});
+            const promptService = new PromptTemplateService(
+              rag.promptTemplates || DEFAULT_PROMPT_TEMPLATES,
+              rag.defaultPromptTemplateId || 'default'
+            );
+            const template = promptService.getDefault();
+            const prompt = `${promptService.render(template, {
+              theme,
+              context: finalContext,
+              pinned: ''
+            })}\n\n请在正文引用相关内容时加上对应的 [n] 编号，文末不需要重复列出来源。`;
+            const result = await this.aiService.generateOriginalDoc(theme, prompt);
+            setLoading(false);
+            close();
+            new PreviewModal(this.app, result, (content, insertToNewNote) => {
+              if (insertToNewNote) {
+                this.app.vault.create('新建原创文档.md', content);
+              } else {
+                const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+                if (activeView) {
+                  activeView.editor.replaceRange(content, activeView.editor.getCursor());
+                }
+              }
+            }, sourceList).open();
+          }
+        } catch (e: any) {
+          setError(e?.message || '生成失败');
         }
       }
     }).open();
@@ -433,6 +449,3 @@ class PreviewModal extends Modal {
     });
   }
 }
-
-// 使用 CommonJS 导出以确保 Obsidian 能加载插件
-module.exports = CogniLinkPlugin;

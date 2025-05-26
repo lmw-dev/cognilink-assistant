@@ -12,7 +12,11 @@
     "format": "prettier --write .",
     "deploy": "./scripts/deploy.sh",
     "clean": "rm -rf dist/ build/ coverage/",
-    "validate": "npm run lint && npm test && npm run build"
+    "validate": "npm run lint && npm test && npm run build",
+    "migrate-vector-storage": "ts-node --project tsconfig.scripts.json scripts/migrate-vector-storage.ts",
+    "migrate:validate": "ts-node --project tsconfig.scripts.json scripts/migrate-vector-storage.ts --validate",
+    "migrate:stats": "ts-node --project tsconfig.scripts.json scripts/migrate-vector-storage.ts --stats",
+    "migrate:rollback": "ts-node --project tsconfig.scripts.json scripts/migrate-vector-storage.ts --rollback"
   },
   "keywords": [
     "obsidian-plugin",
@@ -23,6 +27,7 @@
   "author": "CogniLink Team",
   "license": "MIT",
   "dependencies": {
+    "@lancedb/lancedb": "^0.19.1",
     "@smithery/cli": "^1.1.79",
     "@types/uuid": "^10.0.0",
     "obsidian": "^1.4.0",
@@ -50,6 +55,7 @@
     "jest-environment-jsdom": "^29.7.0",
     "prettier": "^3.5.3",
     "ts-jest": "^29.3.2",
+    "ts-node": "^10.9.0",
     "tslib": "^2.6.0",
     "typescript": "^5.0.0"
   }

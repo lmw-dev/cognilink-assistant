@@ -1,12 +1,12 @@
 {
   "id": "cognilink-assistant",
   "name": "CogniLink Assistant",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "minAppVersion": "1.0.0",
   "description": "An AI-powered assistant for enhancing your knowledge management in Obsidian",
   "author": "CogniLink Team",
   "authorUrl": "https://github.com/yourusername/cognilink-assistant",
   "isDesktopOnly": true,
   "main": "main.js",
-  "buildTime": "2025-05-21T12:05:07Z"
+  "buildTime": "2025-05-22T08:00:17Z"
 }

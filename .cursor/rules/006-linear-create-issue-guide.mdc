@@ -1,0 +1,85 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: "指导 AI 通过 Linear MCP 创建结构清晰的 Feature 或 Task Issues。确保包含所有必要的背景、细节和验收标准。"
+alwaysApply: false
+globs: [] # 这个规则主要是 Agent Requested 或手动调用，通常不基于特定文件自动附加。
+# 如果您有特定的草稿文件命名约定，可以在这里添加 globs。
+---
+
+# Linear Issue 创建指南 (通过 Cursor & Linear MCP)
+
+当您指示我 (AI) 通过 linear MCP 工具在 Linear 中创建一个新的 Issue 时，请遵循本指南以确保 Issue 的结构完整且信息充分。这将有助于保持我们项目管理的一致性和后续开发流程的顺畅。
+
+## 第一步：明确 Issue 类型
+
+请首先明确您希望创建的 Issue 类型：
+
+1.  **Feature (特性/完整需求):** 一个较大的、独立的功能模块或用户故事，通常会包含多个子任务。
+2.  **Task (任务/子需求):** 实现某个 Feature 的具体、可操作的步骤，通常会作为 Feature 的子 Issue。
+
+## 第二步：根据 Issue 类型收集信息
+
+请确保提供以下信息，这将作为调用 linear 创建issue 工具的参数基础。
+
+### A. 如果创建 **Feature Issue**：
+
+我需要以下信息来构造一个完整的 Feature Issue (参考模板 1.1)：
+
+* **`title` (标题):** (必需) 清晰概括 Feature 的核心内容。建议格式：“[Feature] - 具体任务名称”。
+* **`description` (描述):** (必需) 请按以下结构提供详细信息：
+    * **需求背景 (Requirement Background):** 为什么需要这个 Feature？它解决了什么核心问题？目标用户是谁？预期的业务/用户价值是什么？
+    * **用户故事 (User Story) (可选但强烈推荐):** 格式：“作为一个 [用户类型]，我想要 [目标]，以便于 [原因/价值]。”
+    * **功能详述 (Detailed Functionality):** 详细描述此 Feature 的所有功能点、核心交互流程、重要的边界条件和非功能性需求（如性能、安全性考量）。
+    * **验收标准 (Acceptance Criteria - AC):** (必需) 列出所有具体的、可测试的、无歧义的完成标准。
+* **`teamId` (团队ID):** (必需) 指明此 Issue 应归属的 Linear 团队。
+* **`labelIds` (标签ID列表 - 可选):** 适用的标签，例如 `feature`, `user-auth`, `frontend`。
+* **`projectId` (项目ID - 可选):** 如果此 Feature 属于某个特定的 Linear 项目。
+* **`assigneeId` (负责人ID - 可选):** 如果已确定负责人。
+* **`stateId` (状态ID - 可选):** 初始状态，例如“需求明确/设计中”或“待办”。
+* **技术考量 (作为描述的一部分或单独提供):**
+    * **初步技术方案/约束 (Technical Solution/Constraints):** 关键技术选型、API 设计草案、数据模型变更等。
+    * **相关上下文文件/模块 (Related Context):** 任何现有的相关代码、设计稿链接。
+* **AI 提示要点 (可选，供后续参考):** 此 Feature 的核心 AI 辅助开发方向。
+
+### B. 如果创建 **Task Issue** (通常作为 Feature 的子 Issue)：
+
+我需要以下信息来构造一个清晰的 Task Issue (参考模板 1.2)：
+
+* **`title` (标题):** (必需) 具体、可操作的任务描述。建议格式：“[Task：父 Feature 标题/ID] - 具体任务名称”。
+* **`parentId` (父 Issue ID):** (必需) 此 Task 所属的 Feature Issue 的 ID。
+* **`description` (描述):** (必需) 请按以下结构提供：
+    * **任务目标 (Task Objective):** 简洁说明此 Task 要完成的具体工作和预期产出。
+    * **关键上下文参考 (Context Reference - 可选):** 简要提及关联的父 Feature 中的特定部分或 AC 编号。
+    * **执行步骤/技术要点 (Implementation Steps/Technical Notes - 可选但推荐):** 完成此任务的关键步骤或需要特别注意的技术细节。
+    * **Task 验收标准 (Task Acceptance Criteria):** (必需) 针对此 Task 本身的、具体的、可验证的完成标准。
+* **`teamId` (团队ID):** (必需) 通常与父 Feature 一致。
+* **`labelIds` (标签ID列表 - 可选):** 例如 `task`, `backend`, `refactor`。
+* **`assigneeId` (负责人ID - 可选):**
+* **`estimate` (估点 - 可选):**
+* **`stateId` (状态ID - 可选):** 初始状态，例如“待办 (Todo)”。
+* **AI 提示要点 (可选，供后续参考):** 此 Task 的核心 AI 辅助开发方向。
+
+## 第三步：调用 Linear MCP 工具
+
+在我确认已收集到上述所有必要信息后，我将使用这些信息作为参数，通过 `@linear create_issue` 工具来创建相应的 Linear Issue。
+
+例如 (概念性，实际参数需根据MCP工具定义)：
+`@linear create_issue title="[Feature PROJ-123] - 实现密码哈希逻辑" parentId="PROJ-123" description="任务目标: ... Task AC: ..." teamId="TEAM_BACKEND_ID" labelIds=["TASK_LABEL_ID", "SECURITY_LABEL_ID"]`
+
+---
+
+**使用说明：**
+
+1.  **保存文件：** 将此内容保存为 `.cursor/rules/006-linear-issue-template.mdc` 在您的项目根目录下。
+2.  **激活规则：**
+    * **Agent Requested:** 由于 `description` 字段已填写，Cursor 的 AI Agent 在认为需要创建 Linear Issue 时，可能会主动发现并询问是否应用此规则来指导信息收集。
+    * **手动调用:** 在 Cursor 聊天中，当您想要创建 Linear Issue 时，可以手动调用此规则，例如输入 `@create-linear-issue-guide 请帮我创建一个新的 Feature Issue`。AI 随后会根据此规则的指引，向您索要必要的信息。
+3.  **与 Linear MCP 工具协同:** 此规则的目的是在 AI *调用* Linear MCP 的 `create_issue` 工具*之前*，确保所有必需的信息都已收集完整。实际的 Issue 创建动作还是由 MCP 工具完成的。
+
+这个规则将帮助您和 AI 保持一致性，确保每一个通过 Cursor 创建的 Linear Issue 都包含足够的高质量信息，从而更好地支持后续的 Vibe Coding 和项目管理。
+
+

@@ -9,6 +9,7 @@ coverage/
 .vscode/
 package-lock.json
 yarn.lock
-esbuild.config.mjs  # 添加这一行来忽略 ESLint 检查
+esbuild.config.mjs  
+# 添加这一行来忽略 ESLint 检查
 jest.config.js
 jest.setup.js

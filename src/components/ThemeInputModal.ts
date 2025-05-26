@@ -3,7 +3,7 @@ import { App, Modal, Notice, Setting, TFile } from 'obsidian';
 interface ThemeInputModalOptions {
   app: App;
   initialTheme?: string;
-  onSubmit: (theme: string, includeContext: boolean, close: () => void, setLoading: (b: boolean) => void, setError: (msg: string) => void) => void;
+  onSubmit: (theme: string, includeContext: boolean, close: () => void, setLoading: (b: boolean) => void, setError: (msg: string) => void, mode: 'smart' | 'fast') => void;
 }
 
 export class ThemeInputModal extends Modal {
@@ -16,6 +16,7 @@ export class ThemeInputModal extends Modal {
   private checkboxEl: HTMLElement;
   private errorEl: HTMLElement;
   private generateBtn: HTMLButtonElement;
+  private mode: 'smart' | 'fast' = 'smart';
 
   constructor(options: ThemeInputModalOptions) {
     super(options.app);
@@ -27,6 +28,16 @@ export class ThemeInputModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl('h2', { text: '主题驱动原创文档生成' });
+    // 生成模式选择
+    const modeRow = contentEl.createDiv({ cls: 'setting-item' });
+    modeRow.createDiv({ cls: 'setting-item-name', text: '生成模式' });
+    const modeSelect = modeRow.createEl('select');
+    modeSelect.createEl('option', { text: '智能生成（带引用）', value: 'smart' });
+    modeSelect.createEl('option', { text: '极速生成（无引用）', value: 'fast' });
+    modeSelect.value = this.mode;
+    modeSelect.onchange = (e) => {
+      this.mode = (e.target as HTMLSelectElement).value as any;
+    };
     // 主题输入（自定义 textarea 替换 Setting.addText）
     const themeLabel = contentEl.createDiv({ cls: 'setting-item' });
     themeLabel.createDiv({ cls: 'setting-item-name', text: '主题' });
@@ -92,9 +103,16 @@ export class ThemeInputModal extends Modal {
     this.options.onSubmit(
       this.theme.trim(),
       this.includeContext,
-      () => this.close(),
+      () => {
+        this.setLoading(false);
+        this.close();
+      },
       (b) => this.setLoading(b),
-      (msg) => this.setError(msg)
+      (msg) => {
+        this.setError(msg);
+        this.setLoading(false);
+      },
+      this.mode
     );
   }
 } 

@@ -15,6 +15,15 @@ export class SettingsTab extends PluginSettingTab {
   private showOpenAIKey: boolean = false;
   private testResult: string = '';
   private testResultColor: string = '';
+  private embeddingRebuildStatus: {
+    running: boolean;
+    current: number;
+    total: number;
+    success: number;
+    fail: number;
+    failedFiles: string[];
+    message: string;
+  } | null = null;
 
   constructor(app: App, plugin: CogniLinkPlugin) {
     super(app, plugin);
@@ -590,5 +599,99 @@ export class SettingsTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.display();
         }));
+
+    // === 手动重建 embedding 索引 ===
+    containerEl.createEl('h3', { text: 'Embedding 索引管理' });
+    // Embedding 最大内容长度设置
+    new Setting(containerEl)
+      .setName('Embedding 最大内容长度')
+      .setDesc('每篇笔记用于 embedding 的最大字符数，超出将自动截断（默认12000）')
+      .addText(text => text
+        .setValue(String((this.settings as any).embeddingMaxLength ?? 12000))
+        .onChange(async (value) => {
+          (this.settings as any).embeddingMaxLength = Number(value) || 12000;
+          await this.plugin.saveSettings();
+        }));
+
+    // 进度与结果展示
+    let statusDiv: HTMLDivElement | null = null;
+    if (this.embeddingRebuildStatus) {
+      const status = this.embeddingRebuildStatus;
+      statusDiv = containerEl.createEl('div', { cls: 'embedding-rebuild-status' });
+      statusDiv.style.margin = '8px 0';
+      statusDiv.style.fontSize = '0.95em';
+      if (status.running) {
+        statusDiv.textContent = `重建中... (${status.current}/${status.total}) 成功: ${status.success} 失败: ${status.fail}`;
+      } else {
+        statusDiv.textContent = status.message;
+      }
+      if (status.failedFiles.length > 0) {
+        const failTitle = statusDiv.createEl('div', { text: '失败文件列表：', cls: 'embedding-fail-title' });
+        failTitle.style.marginTop = '4px';
+        const failList = statusDiv.createEl('ul', { cls: 'embedding-fail-list' });
+        failList.style.maxHeight = '120px';
+        failList.style.overflowY = 'auto';
+        status.failedFiles.forEach(f => failList.createEl('li', { text: f }));
+      }
+    }
+
+    new Setting(containerEl)
+      .setName('手动重建 embedding 索引')
+      .setDesc('强制对所有笔记重新生成 embedding，适用于索引异常或文档变更后。')
+      .addButton(btn => btn
+        .setButtonText('重建')
+        .setCta()
+        .onClick(async () => {
+          const files = this.plugin.app.vault.getMarkdownFiles();
+          this.embeddingRebuildStatus = {
+            running: true,
+            current: 0,
+            total: files.length,
+            success: 0,
+            fail: 0,
+            failedFiles: [],
+            message: ''
+          };
+          this.display();
+          // 获取最大长度
+          const maxLen = (this.settings as any).embeddingMaxLength ?? 12000;
+          for (let i = 0; i < files.length; i++) {
+            try {
+              let content = await this.plugin.app.vault.read(files[i]);
+              if (content.length > maxLen) {
+                content = content.slice(0, maxLen);
+                // 直接用 console.info 记录
+                console.info(`内容过长，已截断: ${files[i].path} (${content.length} > ${maxLen})`);
+              }
+              let tags: string[] = [];
+              try {
+                const meta = this.plugin.app.metadataCache.getFileCache(files[i]);
+                tags = (meta?.tags ?? []).map((t: any) => t.tag);
+              } catch { /* 忽略元数据异常 */ }
+              // 本地实现 createNoteLink
+              const noteLink = `obsidian://open?vault=${encodeURIComponent(this.plugin.app.vault.getName())}&file=${encodeURIComponent(files[i].path)}`;
+              await this.plugin.embeddingService.updateEmbedding({
+                title: files[i].basename,
+                content,
+                link: noteLink,
+                path: files[i].path,
+                tags,
+                updated: files[i].stat.mtime,
+              });
+              this.embeddingRebuildStatus.success++;
+            } catch (e) {
+              this.embeddingRebuildStatus.fail++;
+              this.embeddingRebuildStatus.failedFiles.push(files[i].path);
+            }
+            this.embeddingRebuildStatus.current = i + 1;
+            this.display();
+            // 避免 UI 卡死
+            await new Promise(res => setTimeout(res, 10));
+          }
+          this.embeddingRebuildStatus.running = false;
+          this.embeddingRebuildStatus.message = `重建完成：成功 ${this.embeddingRebuildStatus.success}，失败 ${this.embeddingRebuildStatus.fail}`;
+          this.display();
+        })
+      );
   }
 }

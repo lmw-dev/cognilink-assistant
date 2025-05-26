@@ -32,15 +32,15 @@ export class RAGService {
    */
   async runRAGPipeline(query: string, topK = 8, threshold = 0.7, dedupThreshold = 0.98): Promise<RAGResultGroup[]> {
     // 1. 检索相关笔记
-    const relevantNotes = await this.embeddingService.findRelevantNotes(query, topK, threshold);
-    // 2. 去重
+    const relevantNotes = await this.embeddingService.findRelevantNotes(query, topK, threshold, 0.82);
+    // 2. 去重（embedding 字段已在 findRelevantNotes 聚合）
     const deduped = this.deduplicateNotes(relevantNotes, dedupThreshold);
     // 3. 归类
     const grouped = this.groupNotesByTag(deduped);
     // 4. 摘要
     const summaries: Record<string, string> = {};
     for (const tag in grouped) {
-      summaries[tag] = await this.summarizeGroup(grouped[tag]);
+      summaries[tag] = await this.summarizeGroup(grouped[tag], query);
     }
     // 5. 组装结果
     return Object.entries(grouped).map(([tag, notes]) => ({
@@ -87,10 +87,10 @@ export class RAGService {
   /**
    * 对一组内容生成一句话摘要
    */
-  async summarizeGroup(notes: Note[]): Promise<string> {
+  async summarizeGroup(notes: Note[], theme: string): Promise<string> {
     if (notes.length === 0) return '';
     const content = notes.map(n => n.content).join('\n\n');
-    const prompt = `请用一句话总结以下内容：\n${content}`;
+    const prompt = `请用一句话总结以下内容，只保留与主题"${theme}"强相关的要点：\n${content}`;
     try {
       const res = await this.aiService.sendMessage({
         role: 'user',
@@ -129,7 +129,7 @@ export class RAGService {
   async runRAGAndSummarize(query: string, topK = 8, threshold = 0.7, dedupThreshold = 0.98): Promise<string> {
     const groups = await this.runRAGPipeline(query, topK, threshold, dedupThreshold);
     const { context } = this.buildContextWithCitations(groups);
-    const prompt = `请基于以下资料，按主题分段整合并归纳总结，内容后附来源编号：\n${context}`;
+    const prompt = `请基于以下资料，按主题"${query}"分段整合并归纳总结，仅纳入与主题高度相关的内容，忽略无关内容，内容后附来源编号：\n${context}`;
     try {
       const res = await this.aiService.sendMessage({
         role: 'user',

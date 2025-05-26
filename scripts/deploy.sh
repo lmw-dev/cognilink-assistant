@@ -2,7 +2,8 @@
 set -e
 
 # Configuration
-TEST_VAULT_PATH="/Users/liumingwei/01-project/31-obsidian/01-cognilink/cognilink"
+# TEST_VAULT_PATH="/Users/liumingwei/01-project/31-obsidian/01-cognilink/cognilink"
+TEST_VAULT_PATH="/Users/liumingwei/Library/Mobile Documents/iCloud~md~obsidian/Documents"
 PLUGIN_NAME="cognilink-assistant"
 PLUGIN_PATH="$TEST_VAULT_PATH/.obsidian/plugins/$PLUGIN_NAME"
 
