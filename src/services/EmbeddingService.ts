@@ -63,14 +63,21 @@ export class EmbeddingService {
       if (exists) {
         const raw = await this.plugin.app.vault.adapter.read(EMBEDDINGS_INDEX_PATH);
         this.embeddings = JSON.parse(raw);
-        this.logger.info('Loaded embeddings index:', Object.keys(this.embeddings).length);
+        this.logger.info(`[EmbeddingService] 加载缓存索引: ${Object.keys(this.embeddings).length} 个条目`);
+        
+        // 显示一些示例条目的时间戳
+        const sampleKeys = Object.keys(this.embeddings).slice(0, 3);
+        for (const key of sampleKeys) {
+          const item = this.embeddings[key];
+          this.logger.info(`[EmbeddingService] 缓存示例 ${key}: 更新时间 ${new Date(item.updated).toISOString()}`);
+        }
       } else {
         this.embeddings = {};
-        this.logger.info('No embeddings index found, starting fresh');
+        this.logger.info('[EmbeddingService] 未找到缓存索引文件，从头开始');
       }
       this.isLoaded = true;
     } catch (e) {
-      this.logger.error('Failed to load embeddings index', e);
+      this.logger.error('[EmbeddingService] 加载缓存索引失败', e);
       this.embeddings = {};
       this.isLoaded = true;
     }
@@ -132,105 +139,243 @@ export class EmbeddingService {
   }
 
   /**
-   * findRelevantNotes: 支持增量嵌入生成与本地缓存 + 语义检索与排序 + 阈值 + 关键词兜底
+   * 删除指定路径的 embedding
+   */
+  async removeEmbedding(filePath: string): Promise<void> {
+    try {
+      // 删除主文件的 embedding
+      if (this.embeddings[filePath]) {
+        delete this.embeddings[filePath];
+        this.logger.info(`[EmbeddingService] 删除 embedding: ${filePath}`);
+      }
+
+      // 删除分片的 embedding
+      const partKeys = Object.keys(this.embeddings).filter(key => key.startsWith(filePath + '#part'));
+      for (const partKey of partKeys) {
+        delete this.embeddings[partKey];
+        this.logger.info(`[EmbeddingService] 删除分片 embedding: ${partKey}`);
+      }
+
+      // 保存更新后的索引
+      await this.saveEmbeddings();
+    } catch (e) {
+      this.logger.error(`[EmbeddingService] 删除 embedding 失败: ${filePath}`, e);
+    }
+  }
+
+  /**
+   * findRelevantNotes: 优化版本 - 懒加载 + 数据库优先策略
    */
   async findRelevantNotes(query: string, topK = 5, threshold = 0.75, minScore = 0.82): Promise<Note[]> {
     try {
       await this.loadEmbeddings();
-      // 1. 加载所有笔记
-      const vault = this.plugin.app.vault;
-      const files = vault.getMarkdownFiles();
-      const notes: Note[] = [];
-      for (const file of files) {
-        const content = await vault.read(file);
-        let tags: string[] = [];
-        try {
-          const meta = this.plugin.app.metadataCache.getFileCache(file);
-          tags = (meta?.tags ?? []).map(t => t.tag);
-        } catch { /* 忽略元数据异常 */ }
-        notes.push({
-          title: file.basename,
-          content,
-          link: this.createNoteLink(file),
-          path: file.path,
-          tags,
-          updated: file.stat.mtime,
-        });
+      
+      this.logger.info(`[RAG] 开始检索，查询: "${query}"`);
+      
+      // 1. 首先尝试从现有缓存中进行语义检索
+      const cachedResults = await this.searchFromCache(query, topK, minScore);
+      
+      if (cachedResults.length > 0) {
+        this.logger.info(`[RAG] 从缓存中找到 ${cachedResults.length} 个相关结果`);
+        return cachedResults;
       }
-      // 2. 检查哪些笔记需要生成嵌入（新增/变更）
-      const toUpdate = notes.filter(note => {
-        const idx = this.embeddings[note.path];
-        return !idx || idx.updated < (note.updated || 0);
-      });
-      if (toUpdate.length > 0) {
-        this.logger.info(`Updating embeddings for ${toUpdate.length} notes...`);
-        for (const note of toUpdate) {
-          await this.updateEmbedding(note);
-        }
+      
+      // 2. 如果缓存中没有足够的结果，进行关键词检索并按需更新
+      this.logger.info(`[RAG] 缓存结果不足，进行关键词检索和按需更新`);
+      const keywordResults = await this.searchByKeywordsAndUpdate(query, topK);
+      
+      if (keywordResults.length > 0) {
+        return keywordResults;
       }
-      // 3. 获取 query 嵌入
-      const queryEmbedding = await this.aiService.generateEmbeddings(query);
-      // 4. 计算相似度并排序（支持分片聚合）
-      const notesWithScores = notes.map(note => {
-        const partKeys = Object.keys(this.embeddings).filter(k => k === note.path || k.startsWith(note.path + '#part'));
-        if (partKeys.length === 0) return { note, score: 0, embedding: undefined };
-        const allEmbeddings = partKeys.map(k => this.embeddings[k].embedding);
-        const dim = allEmbeddings[0].length;
-        const avg: number[] = Array(dim).fill(0);
-        for (const emb of allEmbeddings) {
-          for (let i = 0; i < dim; i++) avg[i] += emb[i];
-        }
-        for (let i = 0; i < dim; i++) avg[i] /= allEmbeddings.length;
-        note.embedding = avg;
-        const score = 1 - cosineDistance(queryEmbedding, avg);
-        return { note, score, embedding: avg };
-      });
-      // 5. 只保留高分内容
-      const highScore = notesWithScores.filter(item => item.score >= minScore)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, topK);
-      this.logger.info(`[RAG] 高分内容筛选后剩余: ${highScore.length}`);
-      // 6. 主题关键词二次过滤
-      const themeWords = query.split(/\s+|,|，|。|\.|;|；|:|：|\||\//).filter(Boolean);
-      const keywordFiltered = highScore.filter(item => {
-        const n = item.note;
-        return themeWords.some(word =>
-          n.title.includes(word) ||
-          (n.tags && n.tags.some(tag => tag.includes(word))) ||
-          n.content.includes(word)
-        );
-      });
-      this.logger.info(`[RAG] 主题词二次过滤后剩余: ${keywordFiltered.length}`);
-      if (keywordFiltered.length > 0) {
-        return keywordFiltered.map(item => item.note);
-      }
-      // 7. 若无结果，回退到高分 embedding 内容
-      if (highScore.length > 0) {
-        return highScore.map(item => item.note);
-      }
-      // 8. 兜底关键词检索（标题/标签），补 embedding 字段
-      const keywordHits = notes.filter(n =>
-        n.title.includes(query) || (n.tags && n.tags.some(tag => query.includes(tag)))
-      ).slice(0, topK);
-      for (const n of keywordHits) {
-        const partKeys = Object.keys(this.embeddings).filter(k => k === n.path || k.startsWith(n.path + '#part'));
-        if (partKeys.length > 0) {
-          const allEmbeddings = partKeys.map(k => this.embeddings[k].embedding);
-          const dim = allEmbeddings[0].length;
-          const avg: number[] = Array(dim).fill(0);
-          for (const emb of allEmbeddings) {
-            for (let i = 0; i < dim; i++) avg[i] += emb[i];
-          }
-          for (let i = 0; i < dim; i++) avg[i] /= allEmbeddings.length;
-          n.embedding = avg;
-        }
-      }
-      this.logger.info(`[RAG] 兜底关键词检索后剩余: ${keywordHits.length}`);
-      return keywordHits;
+      
+      // 3. 最后的兜底策略：返回任何可用的缓存结果
+      this.logger.info(`[RAG] 使用兜底策略，返回可用的缓存结果`);
+      return this.getFallbackResults(topK);
+      
     } catch (err: any) {
-      this.logger.error('findRelevantNotes error:', err);
+      this.logger.error('[RAG] findRelevantNotes error:', err);
       return [];
     }
+  }
+
+  /**
+   * 从缓存中进行语义检索
+   */
+  private async searchFromCache(query: string, topK: number, minScore: number): Promise<Note[]> {
+    const cachedPaths = Object.keys(this.embeddings);
+    if (cachedPaths.length === 0) {
+      this.logger.info('[RAG] 缓存为空，跳过缓存检索');
+      return [];
+    }
+    
+    this.logger.info(`[RAG] 从 ${cachedPaths.length} 个缓存条目中检索`);
+    
+    // 获取 query 嵌入
+    const queryEmbedding = await this.aiService.generateEmbeddings(query);
+    
+    // 计算相似度
+    const scores: Array<{path: string, score: number, item: EmbeddingIndexItem}> = [];
+    
+    for (const path of cachedPaths) {
+      const item = this.embeddings[path];
+      if (!item.embedding) continue;
+      
+      const score = 1 - cosineDistance(queryEmbedding, item.embedding);
+      if (score >= minScore) {
+        scores.push({ path, score, item });
+      }
+    }
+    
+    // 排序并取前 topK
+    scores.sort((a, b) => b.score - a.score);
+    const topResults = scores.slice(0, topK);
+    
+    this.logger.info(`[RAG] 缓存检索找到 ${topResults.length} 个高分结果`);
+    
+    // 构建结果，只读取需要的文件内容
+    const results: Note[] = [];
+    for (const result of topResults) {
+      try {
+        const file = this.plugin.app.vault.getAbstractFileByPath(result.path) as TFile;
+        if (file) {
+          // 检查文件是否需要更新
+          if (result.item.updated < file.stat.mtime) {
+            this.logger.info(`[RAG] 文件已更新，跳过: ${result.path}`);
+            continue;
+          }
+          
+          const content = await this.plugin.app.vault.read(file);
+          const meta = this.plugin.app.metadataCache.getFileCache(file);
+          const tags = (meta?.tags ?? []).map(t => t.tag);
+          
+          results.push({
+            title: file.basename,
+            content,
+            link: this.createNoteLink(file),
+            path: file.path,
+            tags,
+            updated: file.stat.mtime,
+            embedding: result.item.embedding,
+          });
+        }
+      } catch (e) {
+        this.logger.error(`[RAG] 读取缓存结果文件失败: ${result.path}`, e);
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * 通过关键词检索并按需更新 embeddings
+   */
+  private async searchByKeywordsAndUpdate(query: string, topK: number): Promise<Note[]> {
+    const vault = this.plugin.app.vault;
+    const allFiles = vault.getMarkdownFiles();
+    
+    // 关键词过滤
+    const keywords = query.split(/\s+|,|，|。|\.|;|；|:|：|\||\//).filter(Boolean);
+    const candidateFiles = allFiles.filter(file => {
+      return keywords.some(keyword => 
+        file.basename.includes(keyword) || 
+        file.path.includes(keyword)
+      );
+    });
+    
+    this.logger.info(`[RAG] 关键词检索找到 ${candidateFiles.length} 个候选文件`);
+    
+    if (candidateFiles.length === 0) {
+      return [];
+    }
+    
+    // 限制处理数量，避免一次处理太多文件
+    const filesToProcess = candidateFiles.slice(0, Math.min(20, candidateFiles.length));
+    const results: Note[] = [];
+    
+    for (const file of filesToProcess) {
+      try {
+        const cached = this.embeddings[file.path];
+        let needsUpdate = false;
+        
+        if (!cached) {
+          needsUpdate = true;
+          this.logger.info(`[RAG] 新文件需要生成 embedding: ${file.path}`);
+        } else if (cached.updated < file.stat.mtime) {
+          needsUpdate = true;
+          this.logger.info(`[RAG] 文件已更新，需要重新生成 embedding: ${file.path}`);
+        }
+        
+        if (needsUpdate) {
+          // 按需更新单个文件的 embedding
+          const content = await vault.read(file);
+          const meta = this.plugin.app.metadataCache.getFileCache(file);
+          const tags = (meta?.tags ?? []).map(t => t.tag);
+          
+          const note: Note = {
+            title: file.basename,
+            content,
+            link: this.createNoteLink(file),
+            path: file.path,
+            tags,
+            updated: file.stat.mtime,
+          };
+          
+          await this.updateEmbedding(note);
+          results.push(note);
+        } else {
+          // 使用缓存的 embedding
+          const content = await vault.read(file);
+          const meta = this.plugin.app.metadataCache.getFileCache(file);
+          const tags = (meta?.tags ?? []).map(t => t.tag);
+          
+          results.push({
+            title: file.basename,
+            content,
+            link: this.createNoteLink(file),
+            path: file.path,
+            tags,
+            updated: file.stat.mtime,
+            embedding: cached.embedding,
+          });
+        }
+      } catch (e) {
+        this.logger.error(`[RAG] 处理文件失败: ${file.path}`, e);
+      }
+    }
+    
+    this.logger.info(`[RAG] 关键词检索处理完成，返回 ${results.length} 个结果`);
+    return results.slice(0, topK);
+  }
+
+  /**
+   * 兜底策略：返回任何可用的缓存结果
+   */
+  private getFallbackResults(topK: number): Note[] {
+    const cachedPaths = Object.keys(this.embeddings).slice(0, topK);
+    const results: Note[] = [];
+    
+    for (const path of cachedPaths) {
+      try {
+        const file = this.plugin.app.vault.getAbstractFileByPath(path) as TFile;
+        if (file) {
+          const item = this.embeddings[path];
+          results.push({
+            title: file.basename,
+            content: '', // 兜底策略不读取内容
+            link: this.createNoteLink(file),
+            path: file.path,
+            tags: [],
+            updated: file.stat.mtime,
+            embedding: item.embedding,
+          });
+        }
+      } catch (e) {
+        // 忽略错误，继续处理下一个
+      }
+    }
+    
+    this.logger.info(`[RAG] 兜底策略返回 ${results.length} 个结果`);
+    return results;
   }
 
   private createNoteLink(file: TFile): string {

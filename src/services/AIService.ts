@@ -114,7 +114,11 @@ export class AIService {
   async sendMessage(message: Message): Promise<Message> {
     try {
       const provider = this.createProvider();
-      return await provider.sendMessage(message);
+      
+      // 集成 RAG 功能：检索相关文档并增强消息内容
+      const enhancedMessage = await this.enhanceMessageWithRAG(message);
+      
+      return await provider.sendMessage(enhancedMessage);
     } catch (err: any) {
       if (err instanceof ConfigurationError) {
         console.error('[AIService] 配置错误:', err);
@@ -133,6 +137,71 @@ export class AIService {
         new Notice('AI 未知错误：' + (err?.message || err));
         throw err;
       }
+    }
+  }
+
+  /**
+   * 使用 RAG 增强消息内容
+   */
+  private async enhanceMessageWithRAG(message: Message): Promise<Message> {
+    try {
+      // 检查是否启用 RAG 功能
+      const ragSettings = this.settings.rag;
+      if (!ragSettings || !this.plugin.embeddingService) {
+        this.logger.info('[AIService] RAG 功能未启用或服务不可用，使用原始消息');
+        return message;
+      }
+
+      const query = message.content;
+      this.logger.info(`[AIService] 开始 RAG 检索，查询: "${query}"`);
+
+      // 使用 EmbeddingService 检索相关文档
+      const relevantNotes = await this.plugin.embeddingService.findRelevantNotes(
+        query,
+        ragSettings.topK || 5,
+        ragSettings.threshold || 0.7
+      );
+
+      if (relevantNotes.length === 0) {
+        this.logger.info('[AIService] 未找到相关文档，使用原始消息');
+        return message;
+      }
+
+      this.logger.info(`[AIService] 找到 ${relevantNotes.length} 个相关文档`);
+
+      // 构建带上下文的增强消息
+      const contextParts: string[] = [];
+      relevantNotes.forEach((note, index) => {
+        const noteContent = note.content.length > 500 
+          ? note.content.substring(0, 500) + '...' 
+          : note.content;
+        
+        contextParts.push(`【参考资料${index + 1}】来源：${note.title}\n${noteContent}`);
+      });
+
+      const context = contextParts.join('\n\n');
+      
+      // 构建增强的提示词
+      const enhancedContent = `请基于以下参考资料回答用户问题，如果参考资料中没有相关信息，请明确说明并基于你的知识回答。请在回答中标注信息来源。
+
+参考资料：
+${context}
+
+用户问题：${query}
+
+请提供详细、准确的回答，并在适当位置标注参考资料来源（如：根据【参考资料1】...）。`;
+
+      this.logger.info(`[AIService] RAG 增强完成，上下文长度: ${context.length} 字符`);
+
+      return {
+        ...message,
+        content: enhancedContent
+      };
+
+    } catch (error) {
+      this.logger.error('[AIService] RAG 增强失败:', error);
+      // RAG 失败时回退到原始消息
+      return message;
     }
   }
 

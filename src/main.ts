@@ -63,6 +63,10 @@ export default class CogniLinkPlugin extends Plugin {
       console.log('[main] initializing AccessibilityManager');
       this.accessibilityManager = new AccessibilityManager(this.app, this);
       console.log('[main] AccessibilityManager initialized');
+      
+      // 设置文件变化监听
+      this.setupFileWatcher();
+      
       // 注册视图和命令
       addIcon('cognilink-chat', CHAT_ICON);
       this.registerView(
@@ -330,6 +334,130 @@ export default class CogniLinkPlugin extends Plugin {
     const file = await this.app.vault.create(`${theme || '原创文档'}-${Date.now()}.md`, content);
     await this.app.workspace.getLeaf(true).openFile(file as TFile);
     new Notice('已插入到新建笔记');
+  }
+
+  /**
+   * 设置文件变化监听
+   */
+  private setupFileWatcher(): void {
+    console.log('[main] 设置文件变化监听');
+    
+    // 监听文件创建
+    this.registerEvent(
+      this.app.vault.on('create', async (file) => {
+        if (file instanceof TFile && file.extension === 'md') {
+          console.log(`[FileWatcher] 检测到新文件: ${file.path}`);
+          await this.handleFileChange(file, 'create');
+        }
+      })
+    );
+
+    // 监听文件修改
+    this.registerEvent(
+      this.app.vault.on('modify', async (file) => {
+        if (file instanceof TFile && file.extension === 'md') {
+          console.log(`[FileWatcher] 检测到文件修改: ${file.path}`);
+          await this.handleFileChange(file, 'modify');
+        }
+      })
+    );
+
+    // 监听文件删除
+    this.registerEvent(
+      this.app.vault.on('delete', async (file) => {
+        if (file instanceof TFile && file.extension === 'md') {
+          console.log(`[FileWatcher] 检测到文件删除: ${file.path}`);
+          await this.handleFileChange(file, 'delete');
+        }
+      })
+    );
+
+    // 监听文件重命名
+    this.registerEvent(
+      this.app.vault.on('rename', async (file, oldPath) => {
+        if (file instanceof TFile && file.extension === 'md') {
+          console.log(`[FileWatcher] 检测到文件重命名: ${oldPath} -> ${file.path}`);
+          await this.handleFileChange(file, 'rename', oldPath);
+        }
+      })
+    );
+  }
+
+  /**
+   * 处理文件变化
+   */
+  private async handleFileChange(file: TFile, action: 'create' | 'modify' | 'delete' | 'rename', oldPath?: string): Promise<void> {
+    try {
+      // 检查是否启用 RAG 功能
+      if (!this.settings.rag || !this.embeddingService) {
+        return;
+      }
+
+      switch (action) {
+        case 'create':
+        case 'modify':
+          // 延迟处理，避免频繁的文件修改触发过多更新
+          setTimeout(async () => {
+            try {
+              const content = await this.app.vault.read(file);
+              let tags: string[] = [];
+              try {
+                const meta = this.app.metadataCache.getFileCache(file);
+                tags = (meta?.tags ?? []).map(t => t.tag);
+              } catch { /* 忽略元数据异常 */ }
+
+              const note = {
+                title: file.basename,
+                content,
+                link: `obsidian://open?vault=${encodeURIComponent(this.app.vault.getName())}&file=${encodeURIComponent(file.path)}`,
+                path: file.path,
+                tags,
+                updated: file.stat.mtime,
+              };
+
+              await this.embeddingService.updateEmbedding(note);
+              console.log(`[FileWatcher] 已更新 embedding: ${file.path}`);
+            } catch (error) {
+              console.error(`[FileWatcher] 更新 embedding 失败: ${file.path}`, error);
+            }
+          }, 1000); // 延迟1秒处理
+          break;
+
+        case 'delete':
+          // 从缓存中删除对应的 embedding
+          await this.embeddingService.removeEmbedding(file.path);
+          console.log(`[FileWatcher] 已删除 embedding: ${file.path}`);
+          break;
+
+        case 'rename':
+          if (oldPath) {
+            // 删除旧路径的 embedding，添加新路径的 embedding
+            await this.embeddingService.removeEmbedding(oldPath);
+            
+            const content = await this.app.vault.read(file);
+            let tags: string[] = [];
+            try {
+              const meta = this.app.metadataCache.getFileCache(file);
+              tags = (meta?.tags ?? []).map(t => t.tag);
+            } catch { /* 忽略元数据异常 */ }
+
+            const note = {
+              title: file.basename,
+              content,
+              link: `obsidian://open?vault=${encodeURIComponent(this.app.vault.getName())}&file=${encodeURIComponent(file.path)}`,
+              path: file.path,
+              tags,
+              updated: file.stat.mtime,
+            };
+
+            await this.embeddingService.updateEmbedding(note);
+            console.log(`[FileWatcher] 已重命名 embedding: ${oldPath} -> ${file.path}`);
+          }
+          break;
+      }
+    } catch (error) {
+      console.error(`[FileWatcher] 处理文件变化失败: ${file.path}`, error);
+    }
   }
 }
 
