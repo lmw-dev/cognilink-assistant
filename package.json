@@ -16,7 +16,10 @@
     "migrate-vector-storage": "ts-node --project tsconfig.scripts.json scripts/migrate-vector-storage.ts",
     "migrate:validate": "ts-node --project tsconfig.scripts.json scripts/migrate-vector-storage.ts --validate",
     "migrate:stats": "ts-node --project tsconfig.scripts.json scripts/migrate-vector-storage.ts --stats",
-    "migrate:rollback": "ts-node --project tsconfig.scripts.json scripts/migrate-vector-storage.ts --rollback"
+    "migrate:rollback": "ts-node --project tsconfig.scripts.json scripts/migrate-vector-storage.ts --rollback",
+    "test:tom-108": "jest --testPathPattern=content-post-processor",
+    "test:tom-108:watch": "jest --testPathPattern=content-post-processor --watch",
+    "test:tom-108:coverage": "jest --testPathPattern=content-post-processor --coverage"
   },
   "keywords": [
     "obsidian-plugin",

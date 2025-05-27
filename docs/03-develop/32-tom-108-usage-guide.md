@@ -6,7 +6,114 @@ TOM-108 提供了完整的内容后处理和格式化功能，支持5个主流�
 
 ## 🚀 在 Obsidian 中测试
 
-### 方法1：控制台直接测试 ⭐ **推荐**
+### 方法1：一键测试脚本 ⭐ **最推荐**
+
+我们提供了简化的测试脚本，无需复制长代码：
+
+1. **加载测试工具**
+   ```javascript
+   // 在Obsidian控制台中运行以下代码加载测试工具
+   fetch('/scripts/tom-108-console-test.js')
+     .then(response => response.text())
+     .then(script => eval(script))
+     .catch(() => {
+       // 如果文件加载失败，使用内联版本
+       eval(`
+         window.TOM108QuickTest = function() {
+           const plugin = window.app.plugins.plugins['cognilink-assistant'];
+           const processor = plugin?.contentPostProcessor;
+           
+           if (!processor) {
+             console.error('❌ 插件或处理器未找到，请重新加载插件');
+             return;
+           }
+           
+           console.log('🚀 开始TOM-108快速测试...');
+           
+           const platform = {
+             id: 'xiaohongshu',
+             name: '小红书',
+             maxLength: 300,
+             styleKeywords: ['种草'],
+             requiredElements: ['表情符号'],
+             formatRules: { emojiDensity: 'high' },
+             features: ['emoji']
+           };
+           
+           const testContent = '今天分享一个超好用的笔记软件Obsidian！功能强大，界面简洁，支持双向链接，让知识管理变得轻松愉快。强烈推荐给大家试试看！';
+           
+           processor.processContent(testContent, platform)
+             .then(result => {
+               console.log('✅ 测试成功！');
+               console.log('📊 结果摘要:');
+               console.log(\`   质量评分: \${result.qualityScore.overall}/100\`);
+               console.log(\`   风格评分: \${result.styleAssessment.overallScore}/100\`);
+               console.log(\`   处理时间: \${result.processingTime}ms\`);
+               console.log(\`   长度: \${result.lengthValidation.currentLength}/\${result.lengthValidation.targetLength}\`);
+               console.log(\`   有效性: \${result.isValid ? '✅' : '❌'}\`);
+               
+               if (result.suggestions.length > 0) {
+                 console.log('💡 改进建议:', result.suggestions.map(s => s.message));
+               }
+             })
+             .catch(error => {
+               console.error('❌ 测试失败:', error.message);
+             });
+         };
+         
+         console.log('🎉 TOM-108 快速测试工具已加载！');
+         console.log('🚀 输入 TOM108QuickTest() 开始测试');
+       `);
+     });
+   ```
+
+2. **运行测试**
+   ```javascript
+   // 快速测试
+   TOM108QuickTest()
+   
+   // 查看帮助
+   TOM108Help()
+   
+   // 详细测试
+   TOM108DetailedTest()
+   
+   // 批量测试
+   TOM108BatchTest()
+   
+   // 验证测试
+   TOM108ValidateTest()
+   ```
+
+### 方法2：npm 脚本测试 ⭐ **开发推荐**
+
+在项目根目录运行以下命令：
+
+```bash
+# 运行TOM-108单元测试
+npm run test:tom-108
+
+# 监听模式运行测试
+npm run test:tom-108:watch
+
+# 运行测试并生成覆盖率报告
+npm run test:tom-108:coverage
+
+# 运行所有测试
+npm test
+
+# 构建并部署
+npm run build && npm run deploy
+```
+
+### 方法3：Obsidian命令面板测试
+
+1. 在Obsidian中按 `Cmd+P` (macOS) 或 `Ctrl+P` (Windows/Linux) 打开命令面板
+2. 搜索 "TOM-108" 
+3. 选择 "TOM-108 内容后处理系统验收测试"
+4. 查看控制台输出结果
+
+### 方法4：控制台直接测试 (传统方法)
 
 1. **打开 Obsidian 开发者工具**
    - Windows/Linux: `Ctrl + Shift + I`
@@ -17,26 +124,64 @@ TOM-108 提供了完整的内容后处理和格式化功能，支持5个主流�
    // 获取插件实例
    const plugin = window.app.plugins.plugins['cognilink-assistant'];
    
+   // 检查插件是否正确加载
+   if (!plugin) {
+     console.error('插件未找到，请确保插件已启用');
+   } else {
+     console.log('插件已找到:', plugin);
+   }
+   
    // 获取内容后处理器
    const processor = plugin.contentPostProcessor;
+   
+   // 检查处理器是否存在
+   if (!processor) {
+     console.error('ContentPostProcessor 未找到，请重新加载插件');
+   } else {
+     console.log('ContentPostProcessor 已找到:', processor);
+   }
    
    // 定义测试平台
    const platform = {
      id: 'xiaohongshu',
      name: '小红书',
      maxLength: 300,
+     styleKeywords: ['种草', 'yyds', '姐妹们'],
+     requiredElements: ['表情符号', '互动问题'],
+     formatRules: {
+       emojiDensity: 'high',
+       interactionPrompt: true,
+       paragraphBreak: '\n\n'
+     },
      features: ['emoji', 'interaction', 'hashtag']
    };
    
    // 测试内容处理
    const testContent = '今天分享一个超好用的笔记软件Obsidian，真的太棒了！功能强大，界面简洁，支持双向链接，让知识管理变得轻松愉快。强烈推荐给大家试试看！';
    
+   // 执行处理并查看结果
    processor.processContent(testContent, platform).then(result => {
-     console.log('处理结果:', result);
-     console.log('原始长度:', result.metadata.originalLength);
-     console.log('处理后长度:', result.metadata.formattedLength);
-     console.log('质量评分:', result.qualityScore.overall);
-     console.log('风格评分:', result.styleAssessment.overallScore);
+     console.log('✅ 处理成功！');
+     console.log('📝 原始内容:', result.originalContent);
+     console.log('🔄 处理后内容:', result.processedContent);
+     console.log('📏 原始长度:', result.lengthValidation.currentLength);
+     console.log('📐 目标长度:', result.lengthValidation.targetLength);
+     console.log('✅ 长度有效:', result.lengthValidation.isValid);
+     console.log('⭐ 质量评分:', result.qualityScore.overall);
+     console.log('🎨 风格评分:', result.styleAssessment.overallScore);
+     console.log('⏱️ 处理时间:', result.processingTime + 'ms');
+     console.log('🔍 置信度:', result.confidence);
+     
+     if (result.warnings.length > 0) {
+       console.log('⚠️ 警告信息:', result.warnings);
+     }
+     
+     if (result.suggestions.length > 0) {
+       console.log('💡 改进建议:', result.suggestions);
+     }
+   }).catch(error => {
+     console.error('❌ 处理失败:', error);
+     console.error('错误详情:', error.message);
    });
    ```
 
@@ -44,54 +189,6 @@ TOM-108 提供了完整的内容后处理和格式化功能，支持5个主流�
    - 检查控制台输出的详细处理结果
    - 观察长度验证、风格评估、质量评分等指标
    - 查看警告和改进建议
-
-### 方法2：批量处理测试
-
-```javascript
-// 批量处理多个内容
-const contents = [
-  {
-    content: '短内容测试',
-    platform: { id: 'xiaohongshu', name: '小红书', maxLength: 300 },
-    id: 'test1'
-  },
-  {
-    content: '这是一个比较长的内容，用来测试长度处理和截断功能。我们需要确保内容在处理后能够符合平台的长度要求，同时保持语义的完整性和可读性。',
-    platform: { id: 'twitter', name: 'Twitter', maxLength: 280 },
-    id: 'test2'
-  }
-];
-
-processor.batchProcess(contents, {
-  concurrency: 2,
-  failFast: false,
-  retryCount: 1
-}).then(result => {
-  console.log('批量处理结果:', result);
-  console.log('成功处理:', result.successful.length);
-  console.log('处理失败:', result.failed.length);
-});
-```
-
-### 方法3：内容验证测试
-
-```javascript
-// 验证内容是否符合平台要求
-const validation = processor.validateContent(testContent, platform);
-
-console.log('验证结果:', validation);
-console.log('是否有效:', validation.isValid);
-console.log('需要审查:', validation.needsReview);
-console.log('置信度:', validation.confidence);
-
-if (validation.warnings.length > 0) {
-  console.log('警告信息:', validation.warnings);
-}
-
-if (validation.suggestions.length > 0) {
-  console.log('改进建议:', validation.suggestions);
-}
-```
 
 ## 📱 平台特定测试
 
@@ -272,45 +369,91 @@ console.log('配置已更新');
 
 ## 🐛 常见问题
 
-### Q1: 处理结果为空或出错
+### Q1: 提示 "Cannot read properties of undefined (reading 'processContent')"
+
+**原因**: 插件未正确加载或 ContentPostProcessor 未初始化
+
 **解决方案**:
 ```javascript
-// 检查插件是否正确加载
-if (!plugin || !plugin.contentPostProcessor) {
-  console.error('插件未正确加载');
-  return;
+// 1. 检查插件是否存在
+const plugin = window.app.plugins.plugins['cognilink-assistant'];
+console.log('插件状态:', plugin ? '已加载' : '未找到');
+
+// 2. 检查处理器是否存在
+if (plugin) {
+  console.log('ContentPostProcessor:', plugin.contentPostProcessor ? '已初始化' : '未初始化');
 }
 
-// 检查输入参数
-if (!testContent || !platform) {
-  console.error('输入参数不完整');
-  return;
-}
+// 3. 如果未找到，请重新加载插件
+// 在 Obsidian 中：设置 → 社区插件 → CogniLink Assistant → 禁用 → 启用
 ```
 
-### Q2: 质量评分偏低
+### Q2: 处理结果为空或出错
+
 **可能原因**:
-- 内容长度不符合平台要求
-- 缺少平台特色元素（如表情符号、标签等）
-- 语言风格不匹配平台调性
+- 输入参数不完整
+- 平台配置缺少必需字段
+
+**解决方案**:
+```javascript
+// 使用完整的平台配置
+const completePlatform = {
+  id: 'xiaohongshu',
+  name: '小红书',
+  maxLength: 300,
+  styleKeywords: ['种草', 'yyds'],
+  requiredElements: ['表情符号', '互动问题'],
+  formatRules: {
+    emojiDensity: 'high',
+    interactionPrompt: true,
+    paragraphBreak: '\n\n',
+    hashtagStyle: '#话题#',
+    emojiPlacement: 'distributed'
+  },
+  features: ['emoji', 'interaction', 'hashtag']
+};
+```
+
+### Q3: 质量评分偏低
 
 **优化建议**:
-- 根据suggestions中的建议进行调整
+- 根据 suggestions 中的建议进行调整
 - 参考平台特色检查结果
 - 调整内容长度到最佳范围
 
-### Q3: 批量处理部分失败
-**解决方案**:
-```javascript
-// 检查失败的项目
-result.failed.forEach(item => {
-  console.log('失败项目:', item.id);
-  console.log('错误信息:', item.error);
-});
+### Q4: 插件重新加载后需要重新测试
 
-// 重试失败的项目
-const retryItems = result.failed.map(item => item.input);
-processor.batchProcess(retryItems, { retryCount: 2 });
+**说明**: 这是正常现象，每次重新加载插件后都需要重新获取实例
+
+**快速重新测试**:
+```javascript
+// 保存这个函数，重新加载后直接调用
+function quickTest() {
+  const plugin = window.app.plugins.plugins['cognilink-assistant'];
+  const processor = plugin?.contentPostProcessor;
+  
+  if (!processor) {
+    console.error('❌ 请先重新加载插件');
+    return;
+  }
+  
+  const platform = {
+    id: 'xiaohongshu',
+    name: '小红书',
+    maxLength: 300,
+    styleKeywords: [],
+    requiredElements: [],
+    formatRules: {},
+    features: []
+  };
+  
+  processor.processContent('测试内容', platform)
+    .then(r => console.log('✅ 测试成功:', r.qualityScore.overall))
+    .catch(e => console.error('❌ 测试失败:', e));
+}
+
+// 调用测试
+quickTest();
 ```
 
 ## 🎯 最佳实践

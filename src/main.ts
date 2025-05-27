@@ -17,6 +17,7 @@ import { RAGResultModal } from './components/RAGResultModal';
 import { PromptTemplateService } from './services/PromptTemplateService';
 import { OriginalityService, OriginalityResult } from './services/OriginalityService';
 import { PlatformTemplateManager } from './services/platform-template-manager';
+import { ContentPostProcessor } from './services/content-post-processor';
 import { PlatformId, TemplateContext } from './types/social-media';
 
 // Define the chat icon
@@ -35,6 +36,7 @@ export default class CogniLinkPlugin extends Plugin {
   embeddingService: EmbeddingService;
   aiService: AIService;
   ragService: RAGService;
+  contentPostProcessor: ContentPostProcessor;
 
   async onload() {
     try {
@@ -170,6 +172,12 @@ export default class CogniLinkPlugin extends Plugin {
       new Notice('CogniLink 插件已加载');
 
       this.ragService = new RAGService(this.embeddingService, this.aiService);
+      
+      // 初始化内容后处理器
+      console.log('[main] initializing ContentPostProcessor');
+      this.contentPostProcessor = new ContentPostProcessor();
+      console.log('[main] ContentPostProcessor initialized');
+      
       // @ts-expect-error: Obsidian 插件全局挂载 ragService 实例，类型检查可忽略
       window.ragService = this.ragService;
       // @ts-expect-error: Obsidian 插件全局挂载 RAGService 类，便于控制台 new
@@ -191,6 +199,15 @@ export default class CogniLinkPlugin extends Plugin {
         name: 'TOM-107 平台模板系统验收测试',
         callback: () => {
           this.runTOM107AcceptanceTest();
+        }
+      });
+
+      // TOM-108 验收测试命令
+      this.addCommand({
+        id: 'tom-108-acceptance-test',
+        name: 'TOM-108 内容后处理系统验收测试',
+        callback: () => {
+          this.runTOM108AcceptanceTest();
         }
       });
     } catch (error) {
@@ -584,6 +601,210 @@ export default class CogniLinkPlugin extends Plugin {
     } catch (error) {
       console.error('❌ TOM-107验收测试执行失败:', error);
       new Notice('❌ TOM-107验收测试执行失败，请查看控制台');
+    }
+  }
+
+  /**
+   * TOM-108 内容后处理系统验收测试
+   */
+  async runTOM108AcceptanceTest(): Promise<void> {
+    try {
+      console.log('🚀 开始TOM-108内容后处理系统验收测试...');
+      new Notice('开始TOM-108验收测试，请查看控制台输出');
+
+      if (!this.contentPostProcessor) {
+        throw new Error('ContentPostProcessor 未初始化');
+      }
+
+      // 测试平台配置
+      const testPlatforms = [
+        {
+          id: 'xiaohongshu' as PlatformId,
+          name: '小红书',
+          maxLength: 300,
+          styleKeywords: ['种草', 'yyds', '姐妹们'],
+          requiredElements: ['表情符号', '互动问题'],
+          formatRules: {
+            emojiDensity: 'high' as const,
+            interactionPrompt: true,
+            paragraphBreak: '\n\n'
+          },
+          features: ['emoji', 'interaction', 'hashtag']
+        },
+        {
+          id: 'twitter' as PlatformId,
+          name: 'Twitter',
+          maxLength: 280,
+          styleKeywords: ['简洁', '有力'],
+          requiredElements: ['标签'],
+          formatRules: {
+            hashtagStyle: '#话题',
+            characterLimit: 280
+          },
+          features: ['hashtag', 'mention', 'thread']
+        },
+        {
+          id: 'wechat' as PlatformId,
+          name: '微信公众号',
+          maxLength: 1500,
+          styleKeywords: ['专业', '深度'],
+          requiredElements: ['小标题', '结构化'],
+          formatRules: {
+            headingStyle: '## 标题',
+            structureRequired: true
+          },
+          features: ['heading', 'structure', 'professional']
+        }
+      ];
+
+      // 测试内容
+      const testContents = [
+        {
+          name: '短内容测试',
+          content: '今天分享一个超好用的工具！'
+        },
+        {
+          name: '中等长度内容测试',
+          content: '今天分享一个超好用的笔记软件Obsidian，真的太棒了！功能强大，界面简洁，支持双向链接，让知识管理变得轻松愉快。强烈推荐给大家试试看！'
+        },
+        {
+          name: '超长内容测试',
+          content: '这是一个非常长的内容，'.repeat(50) + '需要被截断以符合平台要求。我们需要确保内容在处理后能够符合平台的长度要求，同时保持语义的完整性和可读性。这个测试用来验证智能截断功能是否正常工作。'
+        }
+      ];
+
+      let totalTests = 0;
+      let successCount = 0;
+      const results: any[] = [];
+
+      // 执行测试
+      for (const platform of testPlatforms) {
+        console.log(`\n📱 测试平台: ${platform.name.toUpperCase()}`);
+        console.log('='.repeat(50));
+
+        for (const testContent of testContents) {
+          totalTests++;
+          console.log(`\n🧪 ${testContent.name} - ${platform.name}`);
+          
+          try {
+            const startTime = Date.now();
+            const result = await this.contentPostProcessor.processContent(
+              testContent.content,
+              platform,
+              {
+                strictMode: false,
+                autoFix: true,
+                preserveOriginal: true
+              }
+            );
+            const processingTime = Date.now() - startTime;
+
+            console.log(`✅ 处理成功 (耗时: ${processingTime}ms)`);
+            console.log(`   原始长度: ${result.lengthValidation.currentLength}字符`);
+            console.log(`   目标长度: ${result.lengthValidation.targetLength}字符`);
+            console.log(`   长度有效: ${result.lengthValidation.isValid ? '是' : '否'}`);
+            console.log(`   质量评分: ${result.qualityScore.overall}/100`);
+            console.log(`   风格评分: ${result.styleAssessment.overallScore}/100`);
+            console.log(`   置信度: ${(result.confidence * 100).toFixed(1)}%`);
+            console.log(`   警告数量: ${result.warnings.length}`);
+            console.log(`   建议数量: ${result.suggestions.length}`);
+
+            // 验证处理结果
+            const isValid = result.isValid && 
+                           result.processedContent.length <= platform.maxLength &&
+                           result.qualityScore.overall >= 50;
+
+            if (isValid) {
+              successCount++;
+              console.log(`   ✅ 验证通过`);
+            } else {
+              console.log(`   ❌ 验证失败`);
+            }
+
+            results.push({
+              platform: platform.name,
+              content: testContent.name,
+              success: isValid,
+              processingTime,
+              qualityScore: result.qualityScore.overall,
+              styleScore: result.styleAssessment.overallScore
+            });
+
+          } catch (error) {
+            console.error(`   ❌ 处理失败:`, error.message);
+            results.push({
+              platform: platform.name,
+              content: testContent.name,
+              success: false,
+              error: error.message
+            });
+          }
+        }
+      }
+
+      // 批量处理测试
+      console.log(`\n🔄 批量处理测试`);
+      console.log('='.repeat(50));
+      
+      try {
+        const batchContents = testContents.map((content, index) => ({
+          content: content.content,
+          platform: testPlatforms[index % testPlatforms.length],
+          id: `batch-test-${index + 1}`
+        }));
+
+        const batchStartTime = Date.now();
+        const batchResult = await this.contentPostProcessor.batchProcess(batchContents, {
+          concurrency: 2,
+          failFast: false,
+          retryFailures: true
+        });
+        const batchTime = Date.now() - batchStartTime;
+
+        console.log(`✅ 批量处理完成 (耗时: ${batchTime}ms)`);
+        console.log(`   总数: ${batchResult.totalProcessed}`);
+        console.log(`   成功: ${batchResult.successful}`);
+        console.log(`   失败: ${batchResult.failed}`);
+        console.log(`   成功率: ${((batchResult.successful / batchResult.totalProcessed) * 100).toFixed(1)}%`);
+
+      } catch (error) {
+        console.error(`❌ 批量处理测试失败:`, error.message);
+      }
+
+      // 显示测试统计
+      console.log('\n📊 测试结果统计:');
+      console.log('='.repeat(50));
+      console.log(`总测试数: ${totalTests}`);
+      console.log(`成功数: ${successCount}`);
+      console.log(`失败数: ${totalTests - successCount}`);
+      console.log(`成功率: ${((successCount / totalTests) * 100).toFixed(1)}%`);
+
+      // 性能统计
+      const avgProcessingTime = results
+        .filter(r => r.processingTime)
+        .reduce((sum, r) => sum + r.processingTime, 0) / 
+        results.filter(r => r.processingTime).length;
+
+      const avgQualityScore = results
+        .filter(r => r.qualityScore)
+        .reduce((sum, r) => sum + r.qualityScore, 0) / 
+        results.filter(r => r.qualityScore).length;
+
+      console.log(`\n性能指标:`);
+      console.log(`平均处理时间: ${avgProcessingTime.toFixed(2)}ms`);
+      console.log(`平均质量评分: ${avgQualityScore.toFixed(1)}/100`);
+
+      console.log('\n✅ TOM-108验收测试完成！');
+      
+      if (successCount === totalTests) {
+        new Notice(`✅ TOM-108验收测试全部通过！(${successCount}/${totalTests})`);
+      } else {
+        new Notice(`⚠️ TOM-108验收测试部分失败 (${successCount}/${totalTests})，请查看控制台`);
+      }
+
+    } catch (error) {
+      console.error('❌ TOM-108验收测试执行失败:', error);
+      new Notice('❌ TOM-108验收测试执行失败，请查看控制台');
     }
   }
 }
