@@ -61,6 +61,25 @@ export class QualityScorer implements IQualityScorer {
     const startTime = Date.now();
     this.logger.info(`Calculating quality score for platform: ${platform.id}`);
 
+    // 处理空内容
+    if (!content || typeof content !== 'string') {
+      return {
+        overall: 0,
+        originality: 0,
+        readability: 0,
+        engagement: 0,
+        platformOptimization: 0,
+        breakdown: {
+          contentStructure: 0,
+          languageQuality: 0,
+          platformAlignment: 0,
+          userEngagement: 0,
+          technicalQuality: 0
+        },
+        confidence: 0
+      };
+    }
+
     // 计算各项评分
     const originality = this.checkOriginality(content);
     const readability = this.assessReadability(content);
@@ -94,6 +113,16 @@ export class QualityScorer implements IQualityScorer {
    * 检查原创性
    */
   checkOriginality(content: string): OriginalityResult {
+    // 处理空内容
+    if (!content || typeof content !== 'string') {
+      return {
+        score: 0,
+        duplicateSegments: [],
+        uniquenessRatio: 0,
+        confidence: 0
+      };
+    }
+
     // 简化的原创性检查 - 实际应用中可以集成更复杂的算法
     const sentences = content.split(/[。！？.!?]+/).filter(s => s.trim().length > 0);
     const duplicateSegments: string[] = [];
@@ -139,6 +168,20 @@ export class QualityScorer implements IQualityScorer {
    * 评估可读性
    */
   assessReadability(content: string): ReadabilityScore {
+    // 处理空内容
+    if (!content || typeof content !== 'string') {
+      return {
+        score: 0,
+        level: 'graduate',
+        factors: {
+          sentenceLength: 0,
+          wordComplexity: 0,
+          paragraphStructure: 0,
+          vocabularyDiversity: 0
+        }
+      };
+    }
+
     const sentences = content.split(/[。！？.!?]+/).filter(s => s.trim().length > 0);
     const words = content.split(/\s+/).filter(w => w.trim().length > 0);
     const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim().length > 0);
@@ -191,6 +234,22 @@ export class QualityScorer implements IQualityScorer {
    * 预测参与度
    */
   predictEngagement(content: string, platform: SocialMediaPlatform): EngagementPrediction {
+    // 处理空内容
+    if (!content || typeof content !== 'string') {
+      return {
+        score: 0,
+        factors: {
+          emotionalAppeal: 0,
+          interactivity: 0,
+          relevance: 0,
+          timing: 0,
+          visualElements: 0
+        },
+        recommendations: [],
+        confidence: 0
+      };
+    }
+
     const factors: EngagementFactors = {
       emotionalAppeal: this.calculateEmotionalAppeal(content),
       interactivity: this.calculateInteractivity(content),
