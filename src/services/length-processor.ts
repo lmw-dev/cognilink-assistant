@@ -5,422 +5,310 @@
  */
 
 import { 
+  LengthValidationResult, 
+  TruncateOptions, 
+  OptimizationSuggestion,
   LengthProcessor as ILengthProcessor,
-  LengthValidationResult,
-  TruncateOptions,
-  OptimizationSuggestion
+  LengthRules
 } from '../types/content-processing';
 import { SocialMediaPlatform } from '../types/social-media';
+import { Logger } from '../utils/logger';
 
 /**
- * 长度处理器实现
+ * 长度处理器 - 负责内容长度验证和智能截断
  */
 export class LengthProcessor implements ILengthProcessor {
-  private readonly logger: Console;
+  private logger: Logger;
+  private platformRules: Map<string, LengthRules>;
 
   constructor() {
-    this.logger = console;
+    this.logger = new Logger('LengthProcessor');
+    this.platformRules = new Map();
+    this.initializePlatformRules();
   }
 
   /**
-   * 验证内容长度是否符合平台要求
+   * 初始化平台特定的长度规则
+   */
+  private initializePlatformRules(): void {
+    // 小红书规则
+    this.platformRules.set('xiaohongshu', {
+      minLength: 50,
+      maxLength: 300,
+      optimalLength: 200,
+      truncateStrategy: 'preserve_structure',
+      allowOverflow: false
+    });
+
+    // Twitter规则
+    this.platformRules.set('twitter', {
+      minLength: 10,
+      maxLength: 280,
+      optimalLength: 240,
+      truncateStrategy: 'smart',
+      allowOverflow: false
+    });
+
+    // 微信公众号规则
+    this.platformRules.set('wechat', {
+      minLength: 800,
+      maxLength: 1500,
+      optimalLength: 1200,
+      truncateStrategy: 'preserve_structure',
+      allowOverflow: true
+    });
+
+    // 个人博客规则
+    this.platformRules.set('blog', {
+      minLength: 1000,
+      maxLength: 3000,
+      optimalLength: 2000,
+      truncateStrategy: 'preserve_structure',
+      allowOverflow: true
+    });
+
+    // 头条号规则
+    this.platformRules.set('toutiao', {
+      minLength: 1000,
+      maxLength: 2000,
+      optimalLength: 1500,
+      truncateStrategy: 'preserve_structure',
+      allowOverflow: false
+    });
+  }
+
+  /**
+   * 验证内容长度
    */
   validateLength(content: string, platform: SocialMediaPlatform): LengthValidationResult {
-    const startTime = Date.now();
+    this.logger.info(`Validating length for platform: ${platform.id}`);
     
-    try {
-      const currentLength = this.getContentLength(content);
-      const { minLength, maxLength, optimalLength } = this.getPlatformLengthLimits(platform);
-      
-      const isValid = currentLength >= minLength && currentLength <= maxLength;
-      const exceedsBy = currentLength > maxLength ? currentLength - maxLength : undefined;
-      const shortBy = currentLength < minLength ? minLength - currentLength : undefined;
-      
-      const recommendations = this.generateLengthRecommendations(
-        currentLength, 
-        minLength, 
-        maxLength, 
-        optimalLength,
-        platform
-      );
-
-      const result: LengthValidationResult = {
-        isValid,
-        currentLength,
-        targetLength: optimalLength || maxLength,
-        minLength,
-        maxLength,
-        optimalLength,
-        exceedsBy,
-        shortBy,
-        recommendations
-      };
-
-      this.logger.log(`[LengthProcessor] 长度验证完成: ${Date.now() - startTime}ms`, {
-        platform: platform.id,
-        currentLength,
-        isValid,
-        recommendations: recommendations.length
-      });
-
-      return result;
-    } catch (error) {
-      this.logger.error('[LengthProcessor] 长度验证失败:', error);
-      throw new Error(`长度验证失败: ${error.message}`);
+    const rules = this.platformRules.get(platform.id);
+    if (!rules) {
+      throw new Error(`Unsupported platform: ${platform.id}`);
     }
-  }
 
-  /**
-   * 智能截断内容，保持语义完整性
-   */
-  smartTruncate(content: string, maxLength: number, options?: TruncateOptions): string {
-    const startTime = Date.now();
+    const currentLength = this.getContentLength(content);
+    const isValid = this.isLengthValid(currentLength, rules);
     
-    try {
-      if (this.getContentLength(content) <= maxLength) {
-        return content;
-      }
+    const result: LengthValidationResult = {
+      isValid,
+      currentLength,
+      targetLength: rules.optimalLength,
+      minLength: rules.minLength,
+      maxLength: rules.maxLength,
+      suggestions: []
+    };
 
-      const opts: TruncateOptions = {
-        preserveSentences: true,
-        preserveParagraphs: false,
-        addEllipsis: true,
-        prioritizeKeywords: [],
-        preserveElements: [],
-        truncateStrategy: 'smart',
-        ...options
-      };
-
-      let truncatedContent = '';
-
-      switch (opts.truncateStrategy) {
-        case 'start':
-          truncatedContent = this.truncateFromStart(content, maxLength, opts);
-          break;
-        case 'middle':
-          truncatedContent = this.truncateFromMiddle(content, maxLength, opts);
-          break;
-        case 'end':
-          truncatedContent = this.truncateFromEnd(content, maxLength, opts);
-          break;
-        case 'smart':
-        default:
-          truncatedContent = this.smartTruncateContent(content, maxLength, opts);
-          break;
-      }
-
-      this.logger.log(`[LengthProcessor] 智能截断完成: ${Date.now() - startTime}ms`, {
-        originalLength: this.getContentLength(content),
-        truncatedLength: this.getContentLength(truncatedContent),
-        strategy: opts.truncateStrategy
-      });
-
-      return truncatedContent;
-    } catch (error) {
-      this.logger.error('[LengthProcessor] 智能截断失败:', error);
-      throw new Error(`智能截断失败: ${error.message}`);
+    // 计算超出或不足的字数
+    if (currentLength > rules.maxLength) {
+      result.exceedsBy = currentLength - rules.maxLength;
+      result.suggestions.push(`内容超出最大长度 ${result.exceedsBy} 字符，建议精简内容`);
+    } else if (currentLength < rules.minLength) {
+      result.shortBy = rules.minLength - currentLength;
+      result.suggestions.push(`内容不足最小长度 ${result.shortBy} 字符，建议补充内容`);
     }
-  }
 
-  /**
-   * 提供长度优化建议
-   */
-  suggestLengthOptimization(content: string, platform: SocialMediaPlatform): OptimizationSuggestion[] {
-    const startTime = Date.now();
-    
-    try {
-      const currentLength = this.getContentLength(content);
-      const { minLength, maxLength, optimalLength } = this.getPlatformLengthLimits(platform);
-      const suggestions: OptimizationSuggestion[] = [];
-
-      // 内容过长的建议
-      if (currentLength > maxLength) {
-        const exceedsBy = currentLength - maxLength;
-        
-        if (exceedsBy > maxLength * 0.5) {
-          suggestions.push({
-            type: 'restructure',
-            description: `内容超出限制${exceedsBy}字符，建议重新组织内容结构`,
-            impact: 'high',
-            effort: 'difficult'
-          });
-        } else if (exceedsBy > maxLength * 0.2) {
-          suggestions.push({
-            type: 'shorten',
-            description: `内容超出${exceedsBy}字符，建议删除次要信息`,
-            impact: 'medium',
-            effort: 'moderate'
-          });
-        } else {
-          suggestions.push({
-            type: 'shorten',
-            description: `内容略长${exceedsBy}字符，建议精简表达`,
-            impact: 'low',
-            effort: 'easy'
-          });
-        }
-      }
-
-      // 内容过短的建议
-      if (currentLength < minLength) {
-        const shortBy = minLength - currentLength;
-        
-        if (shortBy > minLength * 0.5) {
-          suggestions.push({
-            type: 'expand',
-            description: `内容过短${shortBy}字符，建议增加详细说明和案例`,
-            impact: 'high',
-            effort: 'difficult'
-          });
-        } else {
-          suggestions.push({
-            type: 'expand',
-            description: `内容偏短${shortBy}字符，建议补充相关信息`,
-            impact: 'medium',
-            effort: 'moderate'
-          });
-        }
-      }
-
-      // 优化长度建议
-      if (optimalLength && Math.abs(currentLength - optimalLength) > optimalLength * 0.1) {
-        const diff = currentLength - optimalLength;
-        if (diff > 0) {
-          suggestions.push({
-            type: 'shorten',
-            description: `建议调整至最佳长度${optimalLength}字符，当前超出${diff}字符`,
-            impact: 'medium',
-            effort: 'moderate'
-          });
-        } else {
-          suggestions.push({
-            type: 'expand',
-            description: `建议调整至最佳长度${optimalLength}字符，当前不足${Math.abs(diff)}字符`,
-            impact: 'medium',
-            effort: 'moderate'
-          });
-        }
-      }
-
-      // 平台特定建议
-      suggestions.push(...this.getPlatformSpecificSuggestions(content, platform));
-
-      this.logger.log(`[LengthProcessor] 优化建议生成完成: ${Date.now() - startTime}ms`, {
-        platform: platform.id,
-        currentLength,
-        suggestionsCount: suggestions.length
-      });
-
-      return suggestions;
-    } catch (error) {
-      this.logger.error('[LengthProcessor] 优化建议生成失败:', error);
-      throw new Error(`优化建议生成失败: ${error.message}`);
-    }
-  }
-
-  /**
-   * 获取内容长度（支持中英文混合计算）
-   */
-  private getContentLength(content: string): number {
-    // 移除多余空白字符
-    const cleanContent = content.trim().replace(/\s+/g, ' ');
-    
-    // 中文字符按1个字符计算，英文单词按实际长度计算
-    let length = 0;
-    for (const char of cleanContent) {
-      // 中文字符、日文字符、韩文字符等
-      if (/[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(char)) {
-        length += 1;
+    // 添加优化建议
+    if (currentLength !== rules.optimalLength) {
+      const diff = Math.abs(currentLength - rules.optimalLength);
+      if (currentLength < rules.optimalLength) {
+        result.suggestions.push(`建议增加 ${diff} 字符以达到最佳长度`);
       } else {
-        length += 1;
-      }
-    }
-    
-    return length;
-  }
-
-  /**
-   * 获取平台长度限制
-   */
-  private getPlatformLengthLimits(platform: SocialMediaPlatform): {
-    minLength: number;
-    maxLength: number;
-    optimalLength?: number;
-  } {
-    const baseMaxLength = platform.maxLength;
-    
-    switch (platform.id) {
-      case 'xiaohongshu':
-        return {
-          minLength: 50,
-          maxLength: baseMaxLength,
-          optimalLength: 200
-        };
-      case 'twitter':
-        return {
-          minLength: 10,
-          maxLength: baseMaxLength,
-          optimalLength: 200
-        };
-      case 'wechat':
-        return {
-          minLength: 800,
-          maxLength: baseMaxLength,
-          optimalLength: 1200
-        };
-      case 'blog':
-        return {
-          minLength: 1000,
-          maxLength: baseMaxLength,
-          optimalLength: 2000
-        };
-      case 'toutiao':
-        return {
-          minLength: 1000,
-          maxLength: baseMaxLength,
-          optimalLength: 1500
-        };
-      default:
-        return {
-          minLength: 50,
-          maxLength: baseMaxLength,
-          optimalLength: Math.floor(baseMaxLength * 0.8)
-        };
-    }
-  }
-
-  /**
-   * 生成长度调整建议
-   */
-  private generateLengthRecommendations(
-    currentLength: number,
-    minLength: number,
-    maxLength: number,
-    optimalLength: number | undefined,
-    platform: SocialMediaPlatform
-  ): string[] {
-    const recommendations: string[] = [];
-
-    if (currentLength > maxLength) {
-      const exceedsBy = currentLength - maxLength;
-      recommendations.push(`内容超出${exceedsBy}字符，需要缩短`);
-      
-      if (platform.id === 'twitter') {
-        recommendations.push('考虑拆分为推文串（Thread）');
-      } else if (platform.id === 'xiaohongshu') {
-        recommendations.push('删除次要的表情符号和装饰性文字');
+        result.suggestions.push(`建议减少 ${diff} 字符以达到最佳长度`);
       }
     }
 
-    if (currentLength < minLength) {
-      const shortBy = minLength - currentLength;
-      recommendations.push(`内容不足${shortBy}字符，需要扩展`);
-      
-      if (platform.id === 'wechat') {
-        recommendations.push('增加数据支撑和案例说明');
-      } else if (platform.id === 'blog') {
-        recommendations.push('添加代码示例和详细解释');
-      }
-    }
-
-    if (optimalLength && currentLength >= minLength && currentLength <= maxLength) {
-      const diff = Math.abs(currentLength - optimalLength);
-      if (diff > optimalLength * 0.1) {
-        recommendations.push(`建议调整至最佳长度${optimalLength}字符`);
-      }
-    }
-
-    return recommendations;
+    this.logger.info(`Length validation result: ${isValid}, current: ${currentLength}, target: ${rules.optimalLength}`);
+    return result;
   }
 
   /**
    * 智能截断内容
    */
-  private smartTruncateContent(content: string, maxLength: number, options: TruncateOptions): string {
-    // 优先保留重要元素
-    let workingContent = this.preserveImportantElements(content, options.preserveElements);
+  smartTruncate(content: string, maxLength: number, options?: TruncateOptions): string {
+    this.logger.info(`Smart truncating content to ${maxLength} characters`);
     
-    if (this.getContentLength(workingContent) <= maxLength) {
-      return workingContent;
+    const defaultOptions: TruncateOptions = {
+      preserveSentences: true,
+      preserveParagraphs: true,
+      addEllipsis: true,
+      prioritizeKeywords: []
+    };
+
+    const opts = { ...defaultOptions, ...options };
+    
+    if (content.length <= maxLength) {
+      return content;
+    }
+
+    let truncated = content;
+
+    // 优先保留关键词
+    if (opts.prioritizeKeywords.length > 0) {
+      truncated = this.preserveKeywords(truncated, opts.prioritizeKeywords, maxLength);
     }
 
     // 按段落截断
-    if (options.preserveParagraphs) {
-      workingContent = this.truncateByParagraphs(workingContent, maxLength);
+    if (opts.preserveParagraphs) {
+      truncated = this.truncateByParagraphs(truncated, maxLength);
     }
-    
+
     // 按句子截断
-    if (options.preserveSentences && this.getContentLength(workingContent) > maxLength) {
-      workingContent = this.truncateBySentences(workingContent, maxLength);
+    if (opts.preserveSentences) {
+      truncated = this.truncateBySentences(truncated, maxLength);
     }
-    
-    // 最后的字符级截断
-    if (this.getContentLength(workingContent) > maxLength) {
-      const targetLength = options.addEllipsis ? maxLength - 3 : maxLength;
-      workingContent = workingContent.substring(0, targetLength);
+
+    // 硬截断
+    if (truncated.length > maxLength) {
+      const ellipsisLength = opts.addEllipsis ? 3 : 0;
+      truncated = truncated.substring(0, maxLength - ellipsisLength);
     }
-    
+
     // 添加省略号
-    if (options.addEllipsis && this.getContentLength(workingContent) < this.getContentLength(content)) {
-      workingContent += '...';
+    if (opts.addEllipsis && truncated.length < content.length) {
+      truncated += '...';
     }
-    
-    return workingContent.trim();
+
+    this.logger.info(`Truncated from ${content.length} to ${truncated.length} characters`);
+    return truncated;
   }
 
   /**
-   * 从开头截断
+   * 建议长度优化
    */
-  private truncateFromStart(content: string, maxLength: number, options: TruncateOptions): string {
-    const targetLength = options.addEllipsis ? maxLength - 3 : maxLength;
-    let truncated = content.substring(content.length - targetLength);
+  suggestLengthOptimization(content: string, platform: SocialMediaPlatform): OptimizationSuggestion[] {
+    const suggestions: OptimizationSuggestion[] = [];
+    const rules = this.platformRules.get(platform.id);
     
-    if (options.preserveSentences) {
-      const sentences = truncated.split(/[。！？.!?]+/);
-      if (sentences.length > 1) {
-        truncated = sentences.slice(1).join('');
+    if (!rules) {
+      return suggestions;
+    }
+
+    const currentLength = this.getContentLength(content);
+    const validation = this.validateLength(content, platform);
+
+    if (!validation.isValid) {
+      if (validation.exceedsBy) {
+        suggestions.push({
+          type: 'length',
+          priority: 'high',
+          message: `内容超长 ${validation.exceedsBy} 字符`,
+          suggestion: this.generateShorteningAdvice(content, validation.exceedsBy),
+          autoFixable: true
+        });
+      }
+
+      if (validation.shortBy) {
+        suggestions.push({
+          type: 'length',
+          priority: 'medium',
+          message: `内容过短 ${validation.shortBy} 字符`,
+          suggestion: this.generateExpandingAdvice(content, validation.shortBy, platform),
+          autoFixable: false
+        });
       }
     }
-    
-    return (options.addEllipsis ? '...' : '') + truncated.trim();
+
+    // 结构优化建议
+    const structureSuggestions = this.analyzeStructure(content, platform);
+    suggestions.push(...structureSuggestions);
+
+    return suggestions;
   }
 
   /**
-   * 从中间截断
+   * 获取内容长度（考虑中英文字符差异）
    */
-  private truncateFromMiddle(content: string, maxLength: number, options: TruncateOptions): string {
-    const targetLength = options.addEllipsis ? maxLength - 3 : maxLength;
-    const halfLength = Math.floor(targetLength / 2);
-    
-    const start = content.substring(0, halfLength);
-    const end = content.substring(content.length - halfLength);
-    
-    return start + (options.addEllipsis ? '...' : '') + end;
+  private getContentLength(content: string): number {
+    // 中文字符按2个字符计算，英文字符按1个字符计算
+    let length = 0;
+    for (const char of content) {
+      if (this.isChinese(char)) {
+        length += 2;
+      } else {
+        length += 1;
+      }
+    }
+    return length;
   }
 
   /**
-   * 从末尾截断
+   * 判断是否为中文字符
    */
-  private truncateFromEnd(content: string, maxLength: number, options: TruncateOptions): string {
-    const targetLength = options.addEllipsis ? maxLength - 3 : maxLength;
-    let truncated = content.substring(0, targetLength);
+  private isChinese(char: string): boolean {
+    const code = char.charCodeAt(0);
+    return code >= 0x4e00 && code <= 0x9fff;
+  }
+
+  /**
+   * 检查长度是否有效
+   */
+  private isLengthValid(length: number, rules: LengthRules): boolean {
+    return length >= rules.minLength && (rules.allowOverflow || length <= rules.maxLength);
+  }
+
+  /**
+   * 保留关键词的截断
+   */
+  private preserveKeywords(content: string, keywords: string[], maxLength: number): string {
+    const keywordPositions = new Map<string, number[]>();
     
-    if (options.preserveSentences) {
-      const lastSentenceEnd = Math.max(
-        truncated.lastIndexOf('。'),
-        truncated.lastIndexOf('！'),
-        truncated.lastIndexOf('？'),
-        truncated.lastIndexOf('.'),
-        truncated.lastIndexOf('!'),
-        truncated.lastIndexOf('?')
-      );
+    // 找到所有关键词位置
+    keywords.forEach(keyword => {
+      const positions: number[] = [];
+      let index = content.indexOf(keyword);
+      while (index !== -1) {
+        positions.push(index);
+        index = content.indexOf(keyword, index + 1);
+      }
+      if (positions.length > 0) {
+        keywordPositions.set(keyword, positions);
+      }
+    });
+
+    if (keywordPositions.size === 0) {
+      return content;
+    }
+
+    // 找到包含最多关键词的区间
+    const bestRange = this.findBestKeywordRange(content, keywordPositions, maxLength);
+    return content.substring(bestRange.start, bestRange.end);
+  }
+
+  /**
+   * 找到包含最多关键词的最佳区间
+   */
+  private findBestKeywordRange(content: string, keywordPositions: Map<string, number[]>, maxLength: number): { start: number; end: number } {
+    let bestScore = 0;
+    let bestRange = { start: 0, end: Math.min(content.length, maxLength) };
+
+    // 滑动窗口寻找最佳区间
+    for (let start = 0; start <= content.length - maxLength; start += 50) {
+      const end = Math.min(start + maxLength, content.length);
+      const score = this.calculateKeywordScore(start, end, keywordPositions);
       
-      if (lastSentenceEnd > targetLength * 0.5) {
-        truncated = truncated.substring(0, lastSentenceEnd + 1);
+      if (score > bestScore) {
+        bestScore = score;
+        bestRange = { start, end };
       }
     }
+
+    return bestRange;
+  }
+
+  /**
+   * 计算区间内关键词得分
+   */
+  private calculateKeywordScore(start: number, end: number, keywordPositions: Map<string, number[]>): number {
+    let score = 0;
     
-    return truncated.trim() + (options.addEllipsis ? '...' : '');
+    keywordPositions.forEach((positions, keyword) => {
+      const count = positions.filter(pos => pos >= start && pos < end).length;
+      score += count * keyword.length; // 关键词越长权重越高
+    });
+
+    return score;
   }
 
   /**
@@ -431,115 +319,120 @@ export class LengthProcessor implements ILengthProcessor {
     let result = '';
     
     for (const paragraph of paragraphs) {
-      const testResult = result + (result ? '\n\n' : '') + paragraph;
-      if (this.getContentLength(testResult) <= maxLength) {
-        result = testResult;
+      if (this.getContentLength(result + paragraph) <= maxLength) {
+        result += (result ? '\n\n' : '') + paragraph;
       } else {
         break;
       }
     }
-    
-    return result || paragraphs[0];
+
+    return result || paragraphs[0]; // 至少返回第一段
   }
 
   /**
    * 按句子截断
    */
   private truncateBySentences(content: string, maxLength: number): string {
-    const sentences = content.split(/([。！？.!?]+)/);
+    const sentences = content.split(/[。！？.!?]+/);
     let result = '';
     
-    for (let i = 0; i < sentences.length; i += 2) {
+    for (let i = 0; i < sentences.length; i++) {
       const sentence = sentences[i];
-      const punctuation = sentences[i + 1] || '';
-      const testResult = result + sentence + punctuation;
+      const punctuation = this.extractPunctuation(content, sentence);
+      const fullSentence = sentence + punctuation;
       
-      if (this.getContentLength(testResult) <= maxLength) {
-        result = testResult;
+      if (this.getContentLength(result + fullSentence) <= maxLength) {
+        result += fullSentence;
       } else {
         break;
       }
     }
-    
-    return result || sentences[0];
+
+    return result || sentences[0]; // 至少返回第一句
   }
 
   /**
-   * 保留重要元素
+   * 提取句子的标点符号
    */
-  private preserveImportantElements(content: string, elements: string[]): string {
-    if (!elements || elements.length === 0) {
-      return content;
+  private extractPunctuation(content: string, sentence: string): string {
+    const index = content.indexOf(sentence);
+    if (index === -1) return '';
+    
+    const afterSentence = content.substring(index + sentence.length);
+    const match = afterSentence.match(/^[。！？.!?]+/);
+    return match ? match[0] : '';
+  }
+
+  /**
+   * 生成缩短建议
+   */
+  private generateShorteningAdvice(content: string, exceedsBy: number): string {
+    const suggestions = [
+      '删除冗余的形容词和副词',
+      '合并相似的句子',
+      '移除不必要的例子或细节',
+      '使用更简洁的表达方式',
+      '删除重复的信息'
+    ];
+
+    const percentage = (exceedsBy / this.getContentLength(content)) * 100;
+    
+    if (percentage > 20) {
+      return '内容严重超长，建议重新组织结构，' + suggestions.slice(0, 3).join('，');
+    } else if (percentage > 10) {
+      return '内容适度超长，建议' + suggestions.slice(0, 2).join('，');
+    } else {
+      return '内容略微超长，建议' + suggestions[0];
+    }
+  }
+
+  /**
+   * 生成扩展建议
+   */
+  private generateExpandingAdvice(content: string, shortBy: number, platform: SocialMediaPlatform): string {
+    const platformAdviceMap: { [key: string]: string } = {
+      'xiaohongshu': '添加更多表情符号、个人体验分享或互动问题',
+      'twitter': '增加相关标签、提及用户或补充观点',
+      'wechat': '添加数据支撑、案例分析或详细说明',
+      'blog': '增加代码示例、技术细节或参考资料',
+      'toutiao': '补充热点话题、争议观点或讨论引导'
+    };
+
+    const specificAdvice = platformAdviceMap[platform.id] || '添加更多相关内容';
+    
+    return `内容过短 ${shortBy} 字符，建议${specificAdvice}`;
+  }
+
+  /**
+   * 分析内容结构
+   */
+  private analyzeStructure(content: string, platform: SocialMediaPlatform): OptimizationSuggestion[] {
+    const suggestions: OptimizationSuggestion[] = [];
+    
+    // 段落分析
+    const paragraphs = content.split(/\n\s*\n/);
+    if (paragraphs.length === 1 && this.getContentLength(content) > 200) {
+      suggestions.push({
+        type: 'format',
+        priority: 'medium',
+        message: '内容缺少段落分隔',
+        suggestion: '建议将长文本分成多个段落，提高可读性',
+        autoFixable: true
+      });
     }
 
-    // 这里可以实现更复杂的元素保留逻辑
-    // 例如保留特定的标签、链接、表情符号等
-    return content;
-  }
-
-  /**
-   * 获取平台特定的优化建议
-   */
-  private getPlatformSpecificSuggestions(content: string, platform: SocialMediaPlatform): OptimizationSuggestion[] {
-    const suggestions: OptimizationSuggestion[] = [];
-
-    switch (platform.id) {
-            case 'xiaohongshu': {
-         const emojiPattern = /🔥|💕|✨|🌟|💯|👍|❤️|😍|🥰/;
-         if (!emojiPattern.test(content)) {
-           suggestions.push({
-             type: 'expand',
-             description: '建议添加表情符号增加亲和力',
-             impact: 'medium',
-             effort: 'easy'
-           });
-         }
-         break;
-       }
-
-      case 'twitter':
-        if (!/[#@]/.test(content)) {
-          suggestions.push({
-            type: 'expand',
-            description: '建议添加相关标签或提及用户',
-            impact: 'medium',
-            effort: 'easy'
-          });
-        }
-        break;
-
-      case 'wechat':
-        if (!/##/.test(content)) {
-          suggestions.push({
-            type: 'restructure',
-            description: '建议添加小标题提升可读性',
-            impact: 'medium',
-            effort: 'moderate'
-          });
-        }
-        break;
-
-      case 'blog':
-        if (!/```/.test(content)) {
-          suggestions.push({
-            type: 'expand',
-            description: '建议添加代码示例增强技术性',
-            impact: 'high',
-            effort: 'moderate'
-          });
-        }
-        break;
-
-      case 'toutiao':
-        if (!/[震惊揭秘真相内幕爆料反转]/.test(content)) {
-          suggestions.push({
-            type: 'restructure',
-            description: '建议增加吸引眼球的表达方式',
-            impact: 'high',
-            effort: 'moderate'
-          });
-        }
-        break;
+    // 句子长度分析
+    const sentences = content.split(/[。！？.!?]+/).filter(s => s.trim());
+    const avgSentenceLength = sentences.reduce((sum, s) => sum + this.getContentLength(s), 0) / sentences.length;
+    
+    if (avgSentenceLength > 50) {
+      suggestions.push({
+        type: 'style',
+        priority: 'low',
+        message: '句子平均长度过长',
+        suggestion: '建议使用更短的句子，提高可读性',
+        autoFixable: false
+      });
     }
 
     return suggestions;

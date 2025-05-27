@@ -18,6 +18,7 @@ export interface ProcessingOptions {
   customRules?: CustomProcessingRules;   // 自定义处理规则
   enableCache?: boolean;                 // 启用缓存
   timeout?: number;                      // 处理超时时间(ms)
+  retryAttempts?: number;
 }
 
 /**
@@ -61,10 +62,11 @@ export interface ProcessedContent {
  */
 export interface ProcessingStep {
   step: string;                          // 步骤名称
+  status: 'pending' | 'running' | 'completed' | 'failed';
   startTime: number;                     // 开始时间
-  endTime: number;                       // 结束时间
-  success: boolean;                      // 是否成功
-  details?: Record<string, any>;         // 详细信息
+  endTime?: number;                      // 结束时间
+  result?: any;                          // 结果
+  error?: string;                        // 错误
 }
 
 /**
@@ -72,19 +74,21 @@ export interface ProcessingStep {
  */
 export interface ProcessingWarning {
   type: 'length' | 'style' | 'format' | 'quality';
-  severity: 'low' | 'medium' | 'high';
+  severity: 'info' | 'warning' | 'error' | 'critical';
   message: string;
   suggestion?: string;
+  autoFixable: boolean;
 }
 
 /**
  * 处理建议
  */
 export interface ProcessingSuggestion {
-  type: 'optimization' | 'enhancement' | 'fix';
-  priority: 'low' | 'medium' | 'high';
-  description: string;
+  category: 'improvement' | 'optimization' | 'correction';
+  priority: number;
+  message: string;
   action?: string;
+  impact: 'low' | 'medium' | 'high';
 }
 
 // ==================== 长度处理相关 ====================
@@ -105,12 +109,11 @@ export interface LengthValidationResult {
   isValid: boolean;                      // 是否符合长度要求
   currentLength: number;                 // 当前长度
   targetLength: number;                  // 目标长度
-  minLength: number;                     // 最小长度
-  maxLength: number;                     // 最大长度
-  optimalLength?: number;                // 最佳长度
+  minLength?: number;                    // 最小长度
+  maxLength?: number;                    // 最大长度
   exceedsBy?: number;                    // 超出字数
   shortBy?: number;                      // 不足字数
-  recommendations: string[];             // 长度调整建议
+  suggestions: string[];                // 长度调整建议
 }
 
 /**
@@ -121,8 +124,6 @@ export interface TruncateOptions {
   preserveParagraphs: boolean;           // 保持段落完整性
   addEllipsis: boolean;                  // 添加省略号
   prioritizeKeywords: string[];          // 优先保留的关键词
-  preserveElements: string[];            // 优先保留的元素
-  truncateStrategy: 'start' | 'middle' | 'end' | 'smart';
 }
 
 /**
@@ -132,18 +133,19 @@ export interface LengthRules {
   minLength: number;
   maxLength: number;
   optimalLength: number;
-  truncateStrategy: string;
-  preserveElements?: string[];
+  truncateStrategy: 'hard' | 'smart' | 'preserve_structure';
+  allowOverflow: boolean;
 }
 
 /**
  * 优化建议
  */
 export interface OptimizationSuggestion {
-  type: 'shorten' | 'expand' | 'restructure';
-  description: string;
-  impact: 'low' | 'medium' | 'high';
-  effort: 'easy' | 'moderate' | 'difficult';
+  type: 'length' | 'style' | 'format' | 'quality';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+  suggestion: string;
+  autoFixable: boolean;
 }
 
 // ==================== 风格评估相关 ====================
@@ -169,6 +171,7 @@ export interface StyleAssessment {
   improvements: string[];                // 改进建议
   strengths: string[];                   // 优势点
   weaknesses: string[];                  // 薄弱点
+  confidence: number;                    // 置信度 (0-1)
 }
 
 /**
@@ -178,7 +181,8 @@ export interface ElementScore {
   element: string;                       // 元素名称
   present: boolean;                      // 是否存在
   score: number;                         // 评分 (0-100)
-  details?: string;                      // 详细信息
+  importance: number;                   // 重要性
+  suggestions: string[];                // 改进建议
 }
 
 /**
@@ -186,10 +190,11 @@ export interface ElementScore {
  */
 export interface KeywordAnalysis {
   totalKeywords: number;                 // 总关键词数
-  matchedKeywords: string[];             // 匹配的关键词
+  requiredKeywords: string[];             // 匹配的关键词
   missingKeywords: string[];             // 缺失的关键词
-  keywordDensity: number;                // 关键词密度
-  relevanceScore: number;                // 相关性评分
+  overusedKeywords: string[];            // 过度使用的关键词
+  density: number;                        // 关键词密度
+  distribution: number;                   // 关键词分布
 }
 
 /**
@@ -205,21 +210,19 @@ export interface ElementCheckResult {
  * 元素检测
  */
 export interface ElementDetection {
-  element: string;
-  detected: boolean;
-  confidence: number;                    // 检测置信度
-  location?: string;                     // 位置信息
-  suggestions?: string[];                // 改进建议
+  detected: string[];
+  missing: string[];
+  confidence: Record<string, number>;
 }
 
 /**
  * 风格建议
  */
 export interface StyleSuggestion {
-  category: 'tone' | 'keywords' | 'elements' | 'structure';
-  priority: 'low' | 'medium' | 'high';
-  description: string;
+  type: 'tone' | 'element' | 'keyword' | 'structure';
+  message: string;
   example?: string;
+  priority: number;
 }
 
 /**
@@ -227,10 +230,10 @@ export interface StyleSuggestion {
  */
 export interface StyleRules {
   requiredElements: string[];
-  optionalElements?: string[];
   toneKeywords: string[];
-  avoidKeywords?: string[];
-  toneTarget: string;
+  forbiddenWords: string[];
+  emojiDensity: { min: number; max: number };
+  interactionRequired: boolean;
 }
 
 // ==================== 格式化相关 ====================
@@ -252,66 +255,50 @@ export interface FormattedContent {
   metadata: FormatMetadata;              // 格式元数据
   warnings: FormatWarning[];             // 格式警告
   suggestions: FormatSuggestion[];       // 格式建议
-  changes: FormatChange[];               // 格式变更记录
 }
 
 /**
  * 格式元数据
  */
 export interface FormatMetadata {
-  paragraphCount: number;                // 段落数
-  sentenceCount: number;                 // 句子数
-  wordCount: number;                     // 词数
-  characterCount: number;                // 字符数
-  emojiCount?: number;                   // 表情符号数
-  hashtagCount?: number;                 // 标签数
-  linkCount?: number;                    // 链接数
-  formatCompliance: number;              // 格式符合度 (0-100)
+  platform: SocialMediaPlatform;          // 目标平台
+  originalLength: number;                  // 原始长度
+  formattedLength: number;                  // 格式化后的长度
+  appliedRules: string[];                   // 应用的规则
+  processingTime: number;                  // 处理耗时(ms)
 }
 
 /**
  * 格式警告
  */
 export interface FormatWarning {
-  type: 'structure' | 'syntax' | 'style' | 'compliance';
+  type: 'structure' | 'character' | 'length' | 'style';
   message: string;
-  location?: string;
-  severity: 'info' | 'warning' | 'error';
+  position?: number;
+  severity: 'low' | 'medium' | 'high';
 }
 
 /**
  * 格式建议
  */
 export interface FormatSuggestion {
-  type: 'improvement' | 'optimization' | 'compliance';
-  description: string;
+  type: 'improvement' | 'optimization' | 'correction';
+  message: string;
   before?: string;
   after?: string;
-}
-
-/**
- * 格式变更
- */
-export interface FormatChange {
-  type: 'add' | 'remove' | 'modify';
-  description: string;
-  location: string;
-  oldValue?: string;
-  newValue?: string;
+  impact: number;
 }
 
 /**
  * 格式规则
  */
 export interface FormatRules {
-  paragraphBreak?: string;
-  lineBreak?: string;
-  headingFormat?: string;
-  listFormat?: string;
-  linkFormat?: string;
-  emojiPlacement?: 'start' | 'end' | 'distributed' | 'none';
-  hashtagFormat?: string;
-  specialRules?: Record<string, any>;
+  paragraphBreak: string;
+  hashtagFormat: string;
+  emojiPlacement: 'start' | 'end' | 'distributed' | 'none';
+  interactionPlacement: 'start' | 'end' | 'middle';
+  lineBreakOptimization: boolean;
+  specialCharacterHandling: boolean;
 }
 
 // ==================== 质量评分相关 ====================
@@ -336,18 +323,18 @@ export interface QualityScore {
   engagement: number;                    // 预期参与度 (0-100)
   platformOptimization: number;          // 平台优化度 (0-100)
   breakdown: QualityBreakdown;           // 详细评分
-  recommendations: QualityRecommendation[];
+  confidence: number;                    // 置信度 (0-1)
 }
 
 /**
  * 质量评分细分
  */
 export interface QualityBreakdown {
-  content: number;                       // 内容质量
-  structure: number;                     // 结构质量
-  language: number;                      // 语言质量
-  relevance: number;                     // 相关性
-  uniqueness: number;                    // 独特性
+  contentStructure: number;               // 内容结构质量
+  languageQuality: number;                // 语言质量
+  platformAlignment: number;                // 平台适配度
+  userEngagement: number;                  // 用户参与度
+  technicalQuality: number;                  // 技术质量
 }
 
 /**
@@ -365,18 +352,9 @@ export interface QualityRecommendation {
  */
 export interface OriginalityResult {
   score: number;                         // 原创性评分 (0-100)
-  similarityDetected: boolean;           // 是否检测到相似内容
-  similarSources?: SimilarSource[];      // 相似来源
+  duplicateSegments: string[];            // 重复段落
+  uniquenessRatio: number;                // 独特性比例
   confidence: number;                    // 检测置信度
-}
-
-/**
- * 相似来源
- */
-export interface SimilarSource {
-  source: string;                        // 来源
-  similarity: number;                    // 相似度 (0-1)
-  matchedText: string;                   // 匹配文本
 }
 
 /**
@@ -384,19 +362,18 @@ export interface SimilarSource {
  */
 export interface ReadabilityScore {
   score: number;                         // 可读性评分 (0-100)
-  level: 'very_easy' | 'easy' | 'moderate' | 'difficult' | 'very_difficult';
-  metrics: ReadabilityMetrics;
-  suggestions: string[];
+  level: 'elementary' | 'middle' | 'high' | 'college' | 'graduate';
+  factors: ReadabilityFactors;
 }
 
 /**
  * 可读性指标
  */
-export interface ReadabilityMetrics {
-  averageSentenceLength: number;         // 平均句子长度
-  averageWordLength: number;             // 平均词长
-  complexWordRatio: number;              // 复杂词比例
-  sentenceVariety: number;               // 句子多样性
+export interface ReadabilityFactors {
+  sentenceLength: number;                 // 平均句子长度
+  wordComplexity: number;                 // 平均词复杂度
+  paragraphStructure: number;              // 段落结构
+  vocabularyDiversity: number;             // 词汇多样性
 }
 
 /**
@@ -404,37 +381,30 @@ export interface ReadabilityMetrics {
  */
 export interface EngagementPrediction {
   score: number;                         // 预期参与度 (0-100)
-  factors: EngagementFactor[];           // 影响因素
+  factors: EngagementFactors;            // 影响因素
   recommendations: string[];             // 提升建议
+  confidence: number;                    // 预测置信度
 }
 
 /**
  * 参与度因素
  */
-export interface EngagementFactor {
-  factor: string;                        // 因素名称
-  impact: number;                        // 影响程度 (0-100)
-  present: boolean;                      // 是否存在
+export interface EngagementFactors {
+  emotionalAppeal: number;                // 情感吸引力
+  interactivity: number;                  // 互动性
+  relevance: number;                      // 相关性
+  timing: number;                          // 时间感
+  visualElements: number;                  // 视觉元素
 }
 
 /**
  * 质量规则
  */
 export interface QualityRules {
+  minQualityScore: number;
   originalityThreshold: number;
-  readabilityTarget: string;
-  engagementFactors: string[];
-  qualityWeights: QualityWeights;
-}
-
-/**
- * 质量权重
- */
-export interface QualityWeights {
-  originality: number;
-  readability: number;
-  engagement: number;
-  platformFit: number;
+  readabilityTarget: 'simple' | 'moderate' | 'complex';
+  engagementThreshold: number;
 }
 
 // ==================== 错误处理相关 ====================
@@ -449,7 +419,7 @@ export interface ProcessingError {
   suggestion: string;
   recoverable: boolean;
   code?: string;
-  details?: Record<string, any>;
+  details?: any;
 }
 
 /**
@@ -522,9 +492,8 @@ export interface RetryStrategy {
 export interface ContentInput {
   id: string;                            // 内容ID
   content: string;                       // 内容文本
-  platform: PlatformId;                 // 目标平台
+  platform: SocialMediaPlatform;        // 目标平台
   options?: ProcessingOptions;           // 处理选项
-  metadata?: Record<string, any>;        // 元数据
 }
 
 /**
@@ -533,7 +502,7 @@ export interface ContentInput {
 export interface BatchProcessingOptions {
   concurrency: number;                   // 并发数
   failFast: boolean;                     // 快速失败
-  retryStrategy?: RetryStrategy;         // 重试策略
+  retryFailures: boolean;                 // 重试失败
   progressCallback?: (progress: BatchProgress) => void;
 }
 
@@ -541,33 +510,33 @@ export interface BatchProcessingOptions {
  * 批量处理结果
  */
 export interface BatchProcessingResult {
-  totalCount: number;                    // 总数
-  successCount: number;                  // 成功数
-  failureCount: number;                  // 失败数
-  results: ProcessedContent[];           // 处理结果
-  errors: ProcessingError[];             // 错误列表
-  processingTime: number;                // 总处理时间
-  summary: BatchSummary;                 // 批量处理摘要
+  totalProcessed: number;                // 总数
+  successful: number;                     // 成功数
+  failed: number;                         // 失败数
+  results: ProcessedContent[];            // 处理结果
+  errors: BatchError[];                    // 错误列表
+  processingTime: number;                 // 总处理时间
 }
 
 /**
  * 批量进度
  */
 export interface BatchProgress {
-  completed: number;                     // 已完成数
-  total: number;                         // 总数
-  percentage: number;                    // 完成百分比
-  currentItem?: string;                  // 当前处理项
+  total: number;                          // 总数
+  completed: number;                      // 已完成数
+  failed: number;                          // 失败数
+  currentItem?: string;                    // 当前处理项
+  estimatedTimeRemaining?: number;         // 估计剩余时间
 }
 
 /**
- * 批量摘要
+ * 批量错误
  */
-export interface BatchSummary {
-  averageProcessingTime: number;         // 平均处理时间
-  averageQualityScore: number;           // 平均质量评分
-  commonIssues: string[];                // 常见问题
-  recommendations: string[];             // 批量建议
+export interface BatchError {
+  id: string;                              // 内容ID
+  error: string;                            // 错误信息
+  retryable: boolean;                        // 是否可重试
+  attempts: number;                          // 重试次数
 }
 
 // ==================== 验证相关 ====================
@@ -577,37 +546,10 @@ export interface BatchSummary {
  */
 export interface ValidationResult {
   isValid: boolean;                      // 是否有效
+  errors: ProcessingError[];             // 验证错误
+  warnings: ProcessingWarning[];          // 验证警告
   score: number;                         // 验证评分 (0-100)
-  errors: ValidationError[];             // 验证错误
-  warnings: ValidationWarning[];         // 验证警告
-  suggestions: ValidationSuggestion[];   // 验证建议
-}
-
-/**
- * 验证错误
- */
-export interface ValidationError {
-  field: string;                         // 错误字段
-  message: string;                       // 错误信息
-  severity: 'error' | 'critical';       // 严重程度
-}
-
-/**
- * 验证警告
- */
-export interface ValidationWarning {
-  field: string;                         // 警告字段
-  message: string;                       // 警告信息
-  suggestion?: string;                   // 建议
-}
-
-/**
- * 验证建议
- */
-export interface ValidationSuggestion {
-  type: 'improvement' | 'optimization';
-  description: string;
-  impact: 'low' | 'medium' | 'high';
+  recommendations: string[];             // 验证建议
 }
 
 // ==================== 配置相关 ====================
