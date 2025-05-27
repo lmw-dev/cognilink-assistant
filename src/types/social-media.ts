@@ -14,6 +14,7 @@ export interface SocialMediaPlatform {
   styleKeywords: string[];
   requiredElements: string[];
   formatRules: FormatRules;
+  features?: string[]; // 平台特性，如 'emoji', 'hashtag', 'interaction' 等
 }
 
 // 格式规则接口
@@ -226,6 +227,97 @@ export interface TemplateConfig {
   enableEvents: boolean;
   defaultTimeout: number;
   maxConcurrentOperations: number;
+}
+
+// ===== TOM-106 社交媒体内容生成相关类型 =====
+
+// 内容生成选项接口
+export interface ContentGenerationOptions {
+  strictMode?: boolean;
+  autoFix?: boolean;
+  useCache?: boolean;
+  userPreferences?: UserPreferences;
+  maxSourceNotes?: number;
+  creativity?: number; // 0-1, AI temperature
+  timeout?: number; // milliseconds
+  concurrency?: number; // for batch operations
+}
+
+// 生成的内容接口
+export interface GeneratedContent {
+  platform: SocialMediaPlatform;
+  content: string;
+  originalContent: string;
+  metadata: ContentMetadata;
+  qualityScore: number;
+  styleAssessment: any; // 从 content-processing.ts 导入
+  lengthValidation: any; // 从 content-processing.ts 导入
+  isValid: boolean;
+  needsReview: boolean;
+  confidence: number;
+  warnings: string[];
+  suggestions: Array<{
+    type: string;
+    message: string;
+    impact: number;
+  }>;
+}
+
+// 内容元数据接口
+export interface ContentMetadata {
+  topic: string;
+  generationTime: number;
+  sourceNotes: Array<{
+    title: string;
+    path: string;
+  }>;
+  templateUsed: string;
+  processingApplied: string[];
+  fromCache: boolean;
+  originalLength?: number;
+  formattedLength?: number;
+  appliedRules?: string[];
+}
+
+// 多平台内容接口
+export interface MultiPlatformContent {
+  topic: string;
+  platforms: SocialMediaPlatform[];
+  results: GeneratedContent[];
+  errors: Array<{
+    platform: SocialMediaPlatform;
+    error: GenerationError;
+  }>;
+  metadata: {
+    totalPlatforms: number;
+    successfulGenerations: number;
+    failedGenerations: number;
+    totalTime: number;
+    averageQualityScore: number;
+  };
+}
+
+// 生成错误类型枚举
+export enum GenerationErrorType {
+  INVALID_INPUT = 'invalid_input',
+  TEMPLATE_ERROR = 'template_error',
+  AI_SERVICE_ERROR = 'ai_service_error',
+  POST_PROCESSING_ERROR = 'post_processing_error',
+  VALIDATION_ERROR = 'validation_error',
+  TIMEOUT_ERROR = 'timeout_error',
+  UNKNOWN_ERROR = 'unknown_error'
+}
+
+// 生成错误类
+export class GenerationError extends Error {
+  constructor(
+    message: string,
+    public type: GenerationErrorType,
+    public context?: Record<string, any>
+  ) {
+    super(message);
+    this.name = 'GenerationError';
+  }
 }
 
 // 所有类型已通过export关键字导出，无需重复导出 
