@@ -388,7 +388,44 @@ if (plugin) {
 // 在 Obsidian 中：设置 → 社区插件 → CogniLink Assistant → 禁用 → 启用
 ```
 
-### Q2: 处理结果为空或出错
+### Q2: 验收测试显示"验证失败"
+
+**原因**: 早期版本的长度要求过于严格，短内容无法通过验证
+
+**解决方案**: 
+- **已修复**: v1.0.1+ 版本已调整长度要求，支持短内容测试
+- **长度要求调整**:
+  - 小红书: 最小长度从50字符降至10字符
+  - 微信公众号: 最小长度从800字符降至100字符
+  - 个人博客: 最小长度从1000字符降至200字符
+  - 头条号: 最小长度从1000字符降至200字符
+- **验证条件优化**: 质量评分要求从50分降至40分，增加性能检查
+
+**验证方法**:
+```javascript
+// 在Obsidian控制台中测试短内容
+const plugin = window.app.plugins.plugins['cognilink-assistant'];
+const processor = plugin?.contentPostProcessor;
+
+const shortContent = '测试短内容';
+const platform = {
+  id: 'xiaohongshu',
+  name: '小红书',
+  maxLength: 300,
+  styleKeywords: [],
+  requiredElements: [],
+  formatRules: {},
+  features: []
+};
+
+processor.processContent(shortContent, platform)
+  .then(result => {
+    console.log('✅ 短内容测试:', result.lengthValidation.isValid ? '通过' : '失败');
+    console.log('📏 长度信息:', `${result.lengthValidation.currentLength}/${result.lengthValidation.targetLength}`);
+  });
+```
+
+### Q3: 处理结果为空或出错
 
 **可能原因**:
 - 输入参数不完整
@@ -414,14 +451,14 @@ const completePlatform = {
 };
 ```
 
-### Q3: 质量评分偏低
+### Q4: 质量评分偏低
 
 **优化建议**:
 - 根据 suggestions 中的建议进行调整
 - 参考平台特色检查结果
 - 调整内容长度到最佳范围
 
-### Q4: 插件重新加载后需要重新测试
+### Q5: 插件重新加载后需要重新测试
 
 **说明**: 这是正常现象，每次重新加载插件后都需要重新获取实例
 
