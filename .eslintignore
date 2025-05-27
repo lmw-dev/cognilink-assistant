@@ -13,3 +13,10 @@ esbuild.config.mjs
 # 添加这一行来忽略 ESLint 检查
 jest.config.js
 jest.setup.js
+
+# 测试文件忽略 ESLint 检查
+src/**/*.test.ts
+src/**/*.test.tsx
+src/__tests__/**/*
+src/__mocks__/**/*
+src/tests/**/*
