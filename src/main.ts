@@ -16,6 +16,8 @@ import { RAGService } from './services/RAGService';
 import { RAGResultModal } from './components/RAGResultModal';
 import { PromptTemplateService } from './services/PromptTemplateService';
 import { OriginalityService, OriginalityResult } from './services/OriginalityService';
+import { PlatformTemplateManager } from './services/platform-template-manager';
+import { PlatformId, TemplateContext } from './types/social-media';
 
 // Define the chat icon
 const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -180,6 +182,15 @@ export default class CogniLinkPlugin extends Plugin {
         name: '智能检索与内容整合',
         callback: () => {
           new RAGResultModal(this.app, this.ragService).open();
+        }
+      });
+
+      // TOM-107 验收测试命令
+      this.addCommand({
+        id: 'tom-107-acceptance-test',
+        name: 'TOM-107 平台模板系统验收测试',
+        callback: () => {
+          this.runTOM107AcceptanceTest();
         }
       });
     } catch (error) {
@@ -457,6 +468,122 @@ export default class CogniLinkPlugin extends Plugin {
       }
     } catch (error) {
       console.error(`[FileWatcher] 处理文件变化失败: ${file.path}`, error);
+    }
+  }
+
+  /**
+   * TOM-107 平台模板系统验收测试
+   */
+  async runTOM107AcceptanceTest(): Promise<void> {
+    try {
+      console.log('🚀 开始TOM-107平台模板系统验收测试...');
+      new Notice('开始TOM-107验收测试，请查看控制台输出');
+
+      // 创建模板管理器
+      const templateManager = new PlatformTemplateManager({
+        enableCache: true,
+        enableValidation: true,
+        enableMetrics: true,
+        enableEvents: false
+      });
+
+      // 测试数据
+      const testContext: TemplateContext = {
+        topic: 'TypeScript开发最佳实践',
+        context: `TypeScript是一种由微软开发的编程语言，它是JavaScript的超集，添加了静态类型定义。
+
+主要优势：
+1. 静态类型检查，减少运行时错误
+2. 更好的IDE支持和代码提示
+3. 大型项目的可维护性更强
+4. 与现有JavaScript代码兼容
+
+最佳实践包括：
+- 启用严格模式
+- 使用接口定义对象结构
+- 避免使用any类型
+- 合理使用泛型
+- 配置ESLint和Prettier`,
+        userPreferences: {
+          tone: 'professional',
+          length: 'medium',
+          style: 'moderate'
+        }
+      };
+
+      // 测试所有平台
+      const platforms: PlatformId[] = ['xiaohongshu', 'twitter', 'wechat', 'blog', 'toutiao'];
+      let successCount = 0;
+      let totalTests = 0;
+
+      for (const platformId of platforms) {
+        totalTests++;
+        console.log(`\n📱 测试平台: ${platformId.toUpperCase()}`);
+        console.log('='.repeat(50));
+
+        try {
+          // 1. 获取模板
+          const template = templateManager.getTemplate(platformId);
+          console.log(`✅ 模板加载成功: ${template.name}`);
+          console.log(`   最大长度: ${template.maxLength}字符`);
+          console.log(`   风格关键词: ${template.styleKeywords.slice(0, 3).join(', ')}...`);
+
+          // 2. 验证模板
+          const validationResult = templateManager.validateTemplate(template);
+          console.log(`✅ 模板验证: ${validationResult.isValid ? '通过' : '失败'} (评分: ${validationResult.score})`);
+          
+          if (!validationResult.isValid) {
+            console.log(`   错误: ${validationResult.errors.map(e => e.message).join(', ')}`);
+          }
+
+          // 3. 渲染模板
+          const startTime = Date.now();
+          const renderResult = templateManager.renderTemplate(template, testContext);
+          const renderTime = Date.now() - startTime;
+          
+          console.log(`✅ 模板渲染成功 (耗时: ${renderTime}ms)`);
+          console.log(`   系统提示长度: ${renderResult.systemPrompt.length}字符`);
+          console.log(`   用户提示长度: ${renderResult.userPrompt.length}字符`);
+
+          // 4. 显示渲染结果预览
+          console.log('\n📝 渲染结果预览:');
+          console.log('--- 系统提示 (前200字符) ---');
+          console.log(renderResult.systemPrompt.substring(0, 200) + '...');
+          
+          console.log('\n--- 用户提示 (前300字符) ---');
+          console.log(renderResult.userPrompt.substring(0, 300) + '...');
+
+          successCount++;
+        } catch (error) {
+          console.error(`❌ 平台 ${platformId} 测试失败:`, error.message);
+        }
+      }
+
+      // 显示统计信息
+      console.log('\n📊 测试结果统计:');
+      console.log('='.repeat(50));
+      console.log(`总测试数: ${totalTests}`);
+      console.log(`成功数: ${successCount}`);
+      console.log(`失败数: ${totalTests - successCount}`);
+      console.log(`成功率: ${((successCount / totalTests) * 100).toFixed(1)}%`);
+
+      const stats = templateManager.getStatistics();
+      console.log(`\n系统统计:`);
+      console.log(`总模板数: ${stats.totalTemplates}`);
+      console.log(`平均加载时间: ${stats.averageLoadTime.toFixed(2)}ms`);
+      console.log(`平均渲染时间: ${stats.averageRenderTime.toFixed(2)}ms`);
+
+      console.log('\n✅ TOM-107验收测试完成！');
+      
+      if (successCount === totalTests) {
+        new Notice(`✅ TOM-107验收测试全部通过！(${successCount}/${totalTests})`);
+      } else {
+        new Notice(`⚠️ TOM-107验收测试部分失败 (${successCount}/${totalTests})，请查看控制台`);
+      }
+
+    } catch (error) {
+      console.error('❌ TOM-107验收测试执行失败:', error);
+      new Notice('❌ TOM-107验收测试执行失败，请查看控制台');
     }
   }
 }

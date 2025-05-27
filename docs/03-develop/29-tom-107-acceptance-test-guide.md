@@ -11,37 +11,35 @@
 
 ## 🚀 快速验收测试
 
-### 方法1：使用验收测试脚本
+### 方法1：使用内置验收测试命令 ⭐ **推荐**
 
-1. **构建插件**
+1. **构建并部署插件**
    ```bash
    npm run build
+   npm run deploy
    ```
 
-2. **在Obsidian开发者控制台中运行**
+2. **在Obsidian中运行验收测试**
    - 打开Obsidian
-   - 按 `Ctrl+Shift+I` (Windows/Linux) 或 `Cmd+Option+I` (Mac) 打开开发者工具
-   - 在控制台中运行：
-   ```javascript
-   // 导入测试脚本
-   const { runTemplateTest } = await import('./scripts/template-acceptance-test.js');
-   
-   // 运行完整验收测试
-   await runTemplateTest();
-   ```
+   - 按 `Ctrl+Shift+P` (Windows/Linux) 或 `Cmd+Shift+P` (Mac) 打开命令面板
+   - 搜索并执行：`TOM-107 平台模板系统验收测试`
+   - 查看通知和控制台输出
 
 3. **查看测试结果**
-   - 控制台会显示每个平台的测试结果
-   - 检查平台特色是否正确体现
-   - 查看性能指标和统计信息
+   - Obsidian会显示测试结果通知
+   - 按 `Ctrl+Shift+I` (Windows/Linux) 或 `Cmd+Option+I` (Mac) 打开开发者工具查看详细日志
+   - 控制台会显示每个平台的详细测试结果
 
-### 方法2：手动测试单个平台
+### 方法2：控制台手动测试（备用方法）
+
+如果方法1不可用，可以在开发者控制台中手动运行：
 
 ```javascript
-// 快速测试单个平台
-const { quickTest } = await import('./scripts/template-acceptance-test.js');
+// 获取插件实例
+const plugin = window.plugin;
 
-await quickTest('xiaohongshu', 'AI工具推荐', '最近发现了几个超好用的AI工具，特别适合提升工作效率...');
+// 运行验收测试
+await plugin.runTOM107AcceptanceTest();
 ```
 
 ## 📋 验收检查清单
