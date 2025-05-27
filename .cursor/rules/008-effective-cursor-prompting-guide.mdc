@@ -9,91 +9,279 @@ alwaysApply: false
 globs: [] # 此规则更侧重于提示编写的方法论，通常是 Agent Requested 或手动调用。
 ---
 
-# 高效 Cursor 提示词 (Prompt) 编写指南
+# 高效Cursor AI Prompt设计指南
 
-本指南旨在帮助您更有效地与 Cursor AI 进行交互，通过精心设计的提示词来提升代码生成质量、加速开发流程，并确保 AI 的输出更符合项目需求和您的个人标准。
+## 🎯 核心原则 (Core Principles)
 
-## 一、核心提示工程原则 (适用于 Cursor)
+### 1. 明确性原则 (Clarity Principle)
+- **目标明确**: 每个prompt必须有清晰的目标和验收标准
+- **指令具体**: 避免模糊表述，使用具体的技术术语和要求
+- **上下文完整**: 提供充分的背景信息和依赖关系
 
-在向 Cursor AI 发出指令（无论是通过聊天、内联编辑还是 Agent 模式）时，请牢记以下原则：
+### 2. 结构化原则 (Structure Principle)
+- **统一格式**: 所有prompt遵循统一的结构模板
+- **层次清晰**: 使用标题、子标题和列表组织内容
+- **逻辑顺序**: 按照理解→要求→实现→验证的顺序组织
 
-1.  **清晰性与明确性 (Clarity & Specificity):**
-    * **准确表达意图：** 使用简洁、无歧义的语言。AI 会逐字解析您的指令。
-    * **具体任务：** 明确指出您希望 AI 执行的具体动作（例如，“生成一个...”, “重构这个函数以...”, “解释这段代码的...”, “为此函数编写单元测试”）。
-    * **避免含糊：** 避免使用如“改进它”、“让它更好”等模糊不清的指令，除非您接着提供具体的改进方向。
+### 3. 可操作性原则 (Actionability Principle)
+- **步骤明确**: 提供清晰的实现步骤和优先级
+- **示例丰富**: 包含代码示例、接口定义和测试用例
+- **检查清单**: 提供完成检查清单确保质量
 
-2.  **上下文是关键 (Context is King):**
-    * **`@-symbols` 的力量:** 广泛使用 `@file/path/to/your/file.js`、`@symbol/yourFunctionName`、`@folder/your/folder/` 以及 `@Codebase` 来为 AI 提供精确的、相关的代码上下文。
-    * **引用 Linear Issue:** 当任务与 Linear Issue 相关时，在提示中明确提及该 Issue 的 ID (例如，`PROJ-123`)，并可简要概括其核心目标或相关的验收标准。如果配置了 Linear MCP，AI 或许能直接获取部分信息，但明确指出总是有益的。
-    * **引用项目规则 (`.cursorrules`):** 如果有适用的项目规则，可以提醒 AI 注意（尽管它们很多时候会自动应用）。例如：“请遵循我们项目中关于错误处理的 `.cursor/rules/error-handling-backend.mdc` 规则来生成此 API 的错误处理逻辑。”
-    * **相关代码片段：** 对于小范围的修改或在没有 `@-symbols` 直接引用的情况下，可以粘贴少量相关的现有代码作为上下文。
+## 📋 标准Prompt结构模板
 
-3.  **约束与需求 (Constraints & Requirements):**
-    * **技术栈/库：** 明确指定应使用的编程语言、框架、库及其版本（如果重要）。
-    * **设计模式/架构：** 如果需要遵循特定的设计模式（如 Repository Pattern, Service Layer）或架构约定，请明确指出。
-    * **禁止项：** 指出不应使用的技术、库或编码模式。
-    * **性能/安全考量：** 如果有特定的性能目标或安全要求（例如，输入验证、防止 SQL 注入），务必在提示中说明。
-    * **代码风格：** 提及项目的主要代码风格或格式化约定（尽管 ESLint/Prettier 等工具后续会处理，但初始生成符合风格更佳）。
+### 必需部分 (Required Sections)
 
-4.  **期望的输出 (Expected Output):**
-    * **格式描述：** 如果期望特定格式的输出（例如，一个包含特定方法的类、一个返回特定结构的 JSON 对象、带有 JSDoc 注释的函数），请进行描述。
-    * **代码示例 (Few-shot Prompting):** 对于复杂的结构或特定的编码风格，在提示中提供一个简短的、期望输出的示例片段，能极大地帮助 AI 理解您的需求。
+#### 1. 目标部分 (🎯 Objective)
+```markdown
+## 🎯 目标 (Objective)
+**Linear Issue**: [任务ID] - [任务标题]
+**父Feature**: [父任务信息]
+**关键验收标准参考**: [具体的AC条件]
 
-5.  **迭代式提示 (Iterative Prompting):**
-    * **分解任务：** 不要期望通过一个庞大而复杂的提示一次性完美解决所有问题。将复杂任务分解为一系列更小、更易于管理的步骤，通过连续的提示逐步构建解决方案。
-    * **逐步求精：** AI 生成初步代码后，通过后续提示进行审查、修正和优化。
+**核心指令**: [一句话描述要完成的核心任务]
+```
 
-6.  **角色扮演 (Role Playing - 可选):**
-    * 有时，为 AI 指定一个角色（例如，“你是一位经验丰富的 Go 语言后端工程师，专注于 API 性能优化...”）可能有助于 AI 校准其回应的风格和深度。
+#### 2. 上下文参考 (📋 Context References)
+```markdown
+## 📋 上下文参考 (Context References)
 
-## 二、结构化提示词模板 (参考概念)
+### 主要操作文件
+- 核心文件: @path/to/main-file.ts (待创建/已存在)
+- 相关文件: @path/to/related-file.ts
 
-虽然每个提示都会根据具体任务而有所不同，但一个结构良好的提示通常包含以下元素（这与我们之前讨论的 `.prompts/` 目录下的模板精神一致）：
+### 依赖的现有服务
+- 服务名: @path/to/existing-service.ts
+- 工具类: @path/to/utility.ts
 
-'''
-**目标**：[简述本次提示希望 AI 完成的核心任务]
-**Linear Issue (如果适用)**: [PROJ-ID] - [Issue 标题摘要]
-**关键验收标准参考 (如果适用)**: [例如：PROJ-ID 的 AC2, AC5]
+### 需要遵循的内部规则
+- 规则1: @.cursor/rules/rule-name.mdc
+- 规则2: @.cursor/rules/another-rule.mdc
+```
 
-**核心指令**:
-    [这里是您的主要请求，例如：请在 @file/src/services/paymentService.ts 中创建一个名为 'processPayment' 的异步函数...]
+#### 3. 具体要求与约束 (🔧 Requirements & Constraints)
+```markdown
+## 🔧 具体要求与约束 (Requirements & Constraints)
 
-**上下文参考**:
-    - 主要操作文件: @file/src/services/paymentService.ts
-    - 相关数据模型: @file/src/models/Order.ts, @symbol/PaymentMethodSchema
-    - 需要遵循的内部规则: .cursor/rules/typescript-standards.mdc (特别是关于异步错误处理的部分)
+### 技术栈约束
+- **语言**: TypeScript (strict mode)
+- **架构模式**: [具体的设计模式]
+- **性能要求**: [具体的性能指标]
 
-**具体要求与约束**:
-    - 函数参数应为: orderId (string), paymentDetails (object 符合 @symbol/PaymentMethodSchema)
-    - 必须使用 try-catch 处理潜在的支付网关 API 调用错误。
-    - 成功时返回: { success: true, transactionId: string }
-    - 失败时抛出: 自定义的 PaymentProcessingError (确保此类已定义或提示 AI 定义)。
-    - 技术栈约束: Node.js, TypeScript。假设已配置好支付网关的 SDK。
+### 功能要求
+[详细的功能规范和约束条件]
 
-**(可选) 期望输出结构示例**:
-    async function processPayment(orderId: string, paymentDetails: PaymentMethodInput): Promise<{ success: true, transactionId: string }> {
-     // ... implementation ...
-    }
-'''
+### 质量标准
+[测试覆盖率、性能指标等质量要求]
+```
 
-## 三、提示后的行动
+#### 4. 期望输出结构 (📝 Expected Output Structure)
+```markdown
+## 📝 期望输出结构 (Expected Output Structure)
 
-* **批判性审查：** 永远不要盲目接受 AI 生成的代码。使用 Cursor 的差异视图仔细审查每一处更改。
-* **测试：** 对 AI 生成或辅助修改的代码进行彻底测试（单元测试、集成测试）。
-* **记录与迭代（针对提示本身）：**
-    * 如果某个提示或一系列提示非常有效，考虑将其模式记录在您的 `.prompts/` 目录下的可复用模板中，或通过 `/Generate Cursor Rules` 命令将其固化为项目规则。
-    * 如果您发现 AI 经常误解某个方面的指令，尝试调整您的提示措辞或提供更明确的上下文/示例，并记录下哪些改进是有效的。
+### 1. 核心类/接口
+```typescript
+// 提供具体的代码结构示例
+export class ExampleClass {
+  // 方法签名和注释
+}
+```
 
-## 四、使用场景
+### 2. 类型定义
+```typescript
+// 完整的TypeScript接口定义
+export interface ExampleInterface {
+  // 属性和方法定义
+}
+```
+```
 
-* **手动调用：** 在 Cursor 聊天中输入 `@effective-cursor-prompting-guide` 可以让 AI 回顾这些原则，或者您可以将其作为个人清单在编写复杂提示前查阅。
-* **Agent Requested：** AI Agent 在处理您的请求时，如果觉得您的指令不够清晰或缺乏上下文，可能会参考此规则的 `description` 来理解如何更好地引导您提供信息。
+#### 5. 实现步骤 (🔄 Implementation Steps)
+```markdown
+## 🔄 实现步骤 (Implementation Steps)
+
+### 第1步: [步骤名称] (优先级: 最高/高/中/低)
+1. 具体任务1
+2. 具体任务2
+3. 具体任务3
+
+### 第2步: [步骤名称] (优先级: 最高/高/中/低)
+[详细的实现指导]
+```
+
+#### 6. 完成检查清单 (🎉 Completion Checklist)
+```markdown
+## 🎉 完成检查清单 (Completion Checklist)
+
+- [ ] 功能实现完成
+- [ ] 单元测试通过
+- [ ] 集成测试通过
+- [ ] 性能基准达标
+- [ ] 代码审查通过
+- [ ] 文档更新完成
+- [ ] Linear任务状态更新
+```
+
+### 可选部分 (Optional Sections)
+
+#### 测试策略 (🧪 Testing Strategy)
+```markdown
+## 🧪 测试策略 (Testing Strategy)
+
+### 单元测试要求
+- 测试覆盖率目标
+- 关键测试场景
+- Mock策略
+
+### 集成测试要求
+- 端到端测试场景
+- 性能测试要求
+```
+
+#### 重要注意事项 (🚨 Important Notes)
+```markdown
+## 🚨 重要注意事项 (Important Notes)
+
+### 技术风险
+- 风险点1及缓解措施
+- 风险点2及缓解措施
+
+### 最佳实践
+- 实践1
+- 实践2
+```
+
+## 🔧 Prompt质量标准
+
+### 1. 完整性检查
+- [ ] 包含所有必需部分
+- [ ] 上下文引用准确（使用@符号）
+- [ ] 代码示例完整可运行
+- [ ] 验收标准明确可测
+
+### 2. 准确性检查
+- [ ] 技术术语使用正确
+- [ ] 文件路径引用准确
+- [ ] 依赖关系描述正确
+- [ ] 性能指标合理
+
+### 3. 可操作性检查
+- [ ] 实现步骤具体明确
+- [ ] 优先级标注清晰
+- [ ] 检查清单完整
+- [ ] 错误处理考虑周全
+
+## 📚 最佳实践示例
+
+### 1. 文件引用规范
+```markdown
+# 正确的引用方式
+- 现有文件: @src/services/AIService.ts
+- 待创建文件: @src/services/new-service.ts (待创建)
+- 规则文件: @.cursor/rules/typescript-standards.mdc
+
+# 错误的引用方式
+- src/services/AIService.ts (缺少@符号)
+- @src/services/ai-service.ts (文件名不匹配)
+```
+
+### 2. 代码示例规范
+```markdown
+# 提供完整的接口定义
+```typescript
+export interface ServiceInterface {
+  // 详细的方法签名
+  methodName(param: Type): Promise<ReturnType>;
+  
+  // 包含注释说明
+  anotherMethod(param: Type): Type;
+}
+```
+
+# 提供实现示例
+```typescript
+export class ServiceImplementation implements ServiceInterface {
+  async methodName(param: Type): Promise<ReturnType> {
+    // 实现逻辑注释
+    return result;
+  }
+}
+```
+```
+
+### 3. 验收标准规范
+```markdown
+# 具体可测的标准
+- [ ] 单元测试覆盖率达到80%以上
+- [ ] API响应时间≤500ms
+- [ ] 支持并发用户数≥100
+
+# 避免模糊的标准
+- [ ] 代码质量良好
+- [ ] 性能表现优秀
+- [ ] 用户体验友好
+```
+
+## 🔄 Prompt迭代优化
+
+### 1. 反馈收集
+- 使用`mcp_interactive-feedback-mcp_interactive_feedback`收集反馈
+- 记录常见问题和改进点
+- 跟踪实现过程中的困难
+
+### 2. 持续改进
+- 根据实际执行效果调整prompt结构
+- 更新最佳实践和示例
+- 完善错误处理和边界情况
+
+### 3. 版本管理
+- 为重要的prompt变更创建版本记录
+- 保留成功的prompt模板供复用
+- 建立prompt质量评估机制
+
+## 🎯 特定场景指导
+
+### 1. 新功能开发Prompt
+- 重点关注架构设计和接口定义
+- 提供详细的实现步骤和依赖关系
+- 包含完整的测试策略
+
+### 2. Bug修复Prompt
+- 明确问题描述和重现步骤
+- 提供根因分析指导
+- 包含回归测试要求
+
+### 3. 重构Prompt
+- 明确重构目标和约束条件
+- 提供向后兼容性要求
+- 包含性能对比基准
+
+### 4. 集成Prompt
+- 详细描述集成点和数据流
+- 提供错误处理和重试机制
+- 包含端到端测试场景
+
+## 📊 Prompt效果评估
+
+### 1. 成功指标
+- 首次实现成功率 ≥ 80%
+- 代码质量评分 ≥ 4.0/5.0
+- 实现时间符合预期 ≥ 90%
+
+### 2. 质量指标
+- 测试覆盖率达标率 ≥ 90%
+- 性能基准达标率 ≥ 95%
+- 代码审查通过率 ≥ 95%
+
+### 3. 持续改进
+- 定期回顾prompt效果
+- 收集开发者反馈
+- 更新最佳实践指南
 
 ---
 
-**使用说明：**
-
-1.  **保存文件：** 将此内容保存为 `.cursor/rules/effective-cursor-prompting-guide.mdc` 在您的项目根目录下。
-2.  **应用：** 此规则主要作为一种方法论指导。您可以将其内容作为编写任何重要 Cursor 提示时的检查清单。当您希望 AI 协助您构建一个提示，或者当 AI 觉得您的提示不够清晰时，它也可以参考这个规则。
-
-通过遵循这些提示编写的最佳实践，您将能够更精确地引导 Cursor AI，减少误解和不必要的返工，从而真正发挥 Vibe Coding 的高效潜能。
+**使用说明**: 
+1. 所有新的prompt都应遵循此指南
+2. 定期回顾和更新现有prompt
+3. 鼓励团队成员贡献最佳实践
+4. 将成功的prompt模式标准化
