@@ -50,13 +50,20 @@ globs: [] # 此规则更侧重于提示编写的方法论，通常是 Agent Requ
 - 核心文件: @path/to/main-file.ts (待创建/已存在)
 - 相关文件: @path/to/related-file.ts
 
-### 依赖的现有服务
+### 依赖的现有服务 (必须验证接口)
 - 服务名: @path/to/existing-service.ts
 - 工具类: @path/to/utility.ts
+- **重要**: 使用前必须通过 `grep_search` 或 `codebase_search` 验证接口方法名和签名
 
 ### 需要遵循的内部规则
 - 规则1: @.cursor/rules/rule-name.mdc
 - 规则2: @.cursor/rules/another-rule.mdc
+
+### 接口依赖检查清单 (🔍 Interface Verification)
+- [ ] 已搜索并确认现有服务的接口定义
+- [ ] 已验证方法名称和参数类型
+- [ ] 已检查返回类型和错误处理
+- [ ] 已查看现有调用示例
 ```
 
 #### 3. 具体要求与约束 (🔧 Requirements & Constraints)
@@ -73,6 +80,12 @@ globs: [] # 此规则更侧重于提示编写的方法论，通常是 Agent Requ
 
 ### 质量标准
 [测试覆盖率、性能指标等质量要求]
+
+### 类型安全要求 (🛡️ Type Safety)
+- **类型优先设计**: 先定义完整的TypeScript接口，再实现功能
+- **接口一致性**: 确保类型定义与实际实现完全匹配
+- **测试驱动**: 编写测试用例时明确期望的数据结构
+- **边界条件**: 考虑undefined、null、空数组等边界情况的类型处理
 ```
 
 #### 4. 期望输出结构 (📝 Expected Output Structure)
@@ -100,6 +113,11 @@ export interface ExampleInterface {
 ```markdown
 ## 🔄 实现步骤 (Implementation Steps)
 
+### 第0步: 前期验证 (优先级: 最高) ⚠️ 必须执行
+1. **接口依赖验证**: 使用 `grep_search` 或 `codebase_search` 确认所有依赖服务的接口
+2. **类型定义检查**: 搜索现有相关类型定义，确保新类型与现有系统兼容
+3. **测试用例设计**: 先设计测试用例，明确期望的输入输出和数据结构
+
 ### 第1步: [步骤名称] (优先级: 最高/高/中/低)
 1. 具体任务1
 2. 具体任务2
@@ -113,10 +131,19 @@ export interface ExampleInterface {
 ```markdown
 ## 🎉 完成检查清单 (Completion Checklist)
 
+### 基础功能检查
 - [ ] 功能实现完成
 - [ ] 单元测试通过
 - [ ] 集成测试通过
 - [ ] 性能基准达标
+
+### 质量保障检查 (基于TOM-109经验)
+- [ ] **接口调用验证**: 所有外部服务调用方法名和参数正确
+- [ ] **类型一致性检查**: TypeScript类型定义与实现完全匹配
+- [ ] **边界条件测试**: 测试用例覆盖null、undefined、空值等边界情况
+- [ ] **编译验证**: `npm run build` 无错误无警告
+
+### 文档和流程检查
 - [ ] 代码审查通过
 - [ ] 文档更新完成
 - [ ] Linear任务状态更新
@@ -149,6 +176,23 @@ export interface ExampleInterface {
 ### 最佳实践
 - 实践1
 - 实践2
+
+### 常见Bug预防 (基于TOM-109调试经验)
+#### 1. 接口依赖错误预防
+- ❌ **错误做法**: 假设方法名 `this.aiService.generateResponse()`
+- ✅ **正确做法**: 先搜索接口 `grep_search "class AIService"` 确认方法名为 `sendMessage()`
+
+#### 2. 类型定义不一致预防
+- ❌ **错误做法**: 实现后再调整类型定义
+- ✅ **正确做法**: 先定义完整接口，再按接口实现功能
+
+#### 3. 批量处理逻辑错误预防
+- ❌ **错误做法**: 忽略边界条件（空数组、无效数据）
+- ✅ **正确做法**: 先考虑所有边界情况，再实现核心逻辑
+
+#### 4. 测试与实现不匹配预防
+- ❌ **错误做法**: 测试期望 `> 70`，实现判断 `< 70`
+- ✅ **正确做法**: 明确业务需求的边界条件，统一测试和实现逻辑
 ```
 
 ## 🔧 Prompt质量标准
