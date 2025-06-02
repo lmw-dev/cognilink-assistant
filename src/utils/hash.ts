@@ -14,12 +14,31 @@ export function createHash(input: string): string {
 
   // 在生产环境中使用crypto
   try {
-    const crypto = require('crypto');
-    return crypto.createHash('md5').update(input).digest('hex');
+    // 使用动态import代替require
+    return createHashSync(input);
   } catch (error) {
     // 如果crypto不可用，回退到简单哈希
     return simpleHash(input);
   }
+}
+
+/**
+ * 同步创建哈希（用于生产环境）
+ */
+function createHashSync(input: string): string {
+  // 在Node.js环境中使用crypto
+  if (typeof window === 'undefined') {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const crypto = eval('require')('crypto');
+      return crypto.createHash('md5').update(input).digest('hex');
+    } catch {
+      return simpleHash(input);
+    }
+  }
+  
+  // 在浏览器环境中回退到简单哈希
+  return simpleHash(input);
 }
 
 /**

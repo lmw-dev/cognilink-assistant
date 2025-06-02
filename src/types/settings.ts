@@ -1,4 +1,6 @@
 import type { ProviderModelValue } from '../constants/ai-models';
+import { App } from 'obsidian';
+import { AdvancedPromptTemplate } from './prompt-advanced';
 
 export type AIProvider = 'anthropic' | 'local' | 'openai';
 export type AIModel = ProviderModelValue;
@@ -57,11 +59,45 @@ export interface RAGSettings {
   };
 }
 
+export interface PromptModuleSettings {
+  enabled: boolean;
+  templates: AdvancedPromptTemplate[];
+  enableValidation: boolean;
+  enablePerformanceTracking: boolean;
+  enableCache: boolean;
+  cacheSize: number;
+  cacheTTL: number;
+  maxTemplates: number;
+  autoBackup: boolean;
+  backupInterval: number;
+  defaultAntiAISettings: {
+    languageNaturalization: {
+      enabled: boolean;
+      sentenceVariation: number;
+      colloquialLevel: number;
+      emotionalNuance: number;
+    };
+    personalizationInjection: {
+      enabled: boolean;
+      userStyleMimicry: boolean;
+      personalExperience: boolean;
+      uniquePerspective: boolean;
+    };
+    moderateImperfection: {
+      enabled: boolean;
+      minorInconsistency: number;
+      naturalPauses: boolean;
+      colloquialErrors: boolean;
+    };
+  };
+}
+
 export interface Settings {
   ui: UISettings;
   ai: AISettings;
   shortcuts: Shortcuts;
   rag?: RAGSettings;
+  promptModule: PromptModuleSettings;
 }
 
 export type PluginSettings = Settings;
@@ -108,6 +144,38 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     topK: 8,
     threshold: 0.7,
     dedupThreshold: 0.98
+  },
+  promptModule: {
+    enabled: true,
+    templates: [],
+    enableValidation: true,
+    enablePerformanceTracking: true,
+    enableCache: true,
+    cacheSize: 1000,
+    cacheTTL: 3600000,
+    maxTemplates: 10000,
+    autoBackup: true,
+    backupInterval: 86400000,
+    defaultAntiAISettings: {
+      languageNaturalization: {
+        enabled: true,
+        sentenceVariation: 0.7,
+        colloquialLevel: 0.5,
+        emotionalNuance: 0.6
+      },
+      personalizationInjection: {
+        enabled: true,
+        userStyleMimicry: true,
+        personalExperience: true,
+        uniquePerspective: true
+      },
+      moderateImperfection: {
+        enabled: true,
+        minorInconsistency: 0.03,
+        naturalPauses: true,
+        colloquialErrors: false
+      }
+    }
   }
 };
 
@@ -123,3 +191,36 @@ export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
     content: '# 引言\n${theme}\n\n# 方法\n${context}\n\n# 结果\n${pinned}\n\n# 讨论\n请基于以上内容生成完整文档。'
   }
 ];
+
+export const DEFAULT_PROMPT_MODULE_SETTINGS: PromptModuleSettings = {
+  enabled: true,
+  templates: [],
+  enableValidation: true,
+  enablePerformanceTracking: true,
+  enableCache: true,
+  cacheSize: 1000,
+  cacheTTL: 3600000,
+  maxTemplates: 10000,
+  autoBackup: true,
+  backupInterval: 86400000,
+  defaultAntiAISettings: {
+    languageNaturalization: {
+      enabled: true,
+      sentenceVariation: 0.7,
+      colloquialLevel: 0.5,
+      emotionalNuance: 0.6
+    },
+    personalizationInjection: {
+      enabled: true,
+      userStyleMimicry: true,
+      personalExperience: true,
+      uniquePerspective: true
+    },
+    moderateImperfection: {
+      enabled: true,
+      minorInconsistency: 0.03,
+      naturalPauses: true,
+      colloquialErrors: false
+    }
+  }
+};

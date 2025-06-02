@@ -68,25 +68,23 @@ describe('ContentGenerationPanel', () => {
   it('displays platform options correctly', () => {
     render(<ContentGenerationPanel {...defaultProps} />);
     
-    const platformSelects = screen.getAllByRole('combobox');
-    const platformSelect = platformSelects[0]; // First select is platform selector
-    expect(platformSelect).toBeInTheDocument();
-    
-    // Check if platform options are present
-    expect(screen.getByText('小红书 (最大1000字符)')).toBeInTheDocument();
-    expect(screen.getByText('Twitter (最大280字符)')).toBeInTheDocument();
+    // Check if platform cards are present instead of select options
+    expect(screen.getByText('小红书')).toBeInTheDocument();
+    expect(screen.getByText('Twitter')).toBeInTheDocument();
+    expect(screen.getByText('最大 1000 字符')).toBeInTheDocument();
+    expect(screen.getByText('最大 280 字符')).toBeInTheDocument();
   });
 
   it('shows platform info when platform is selected', async () => {
     render(<ContentGenerationPanel {...defaultProps} />);
     
-    const platformSelects = screen.getAllByRole('combobox');
-    const platformSelect = platformSelects[0]; // First select is platform selector
-    fireEvent.change(platformSelect, { target: { value: 'xiaohongshu' } });
+    // Click on platform card instead of changing select
+    const platformCard = screen.getByText('小红书').closest('.platform-card');
+    fireEvent.click(platformCard!);
     
     await waitFor(() => {
-      expect(screen.getByText('特性: emoji, hashtag, interaction')).toBeInTheDocument();
-      expect(screen.getByText('风格关键词: 生活, 分享, 种草')).toBeInTheDocument();
+      expect(screen.getByText('emoji • hashtag • interaction')).toBeInTheDocument();
+      expect(screen.getByText('生活 • 分享 • 种草')).toBeInTheDocument();
     });
   });
 
@@ -97,12 +95,8 @@ describe('ContentGenerationPanel', () => {
     const generateButton = screen.getByText('生成内容');
     fireEvent.click(generateButton);
     
-    // Should show validation errors
-    await waitFor(() => {
-      expect(screen.getByText('请选择目标平台')).toBeInTheDocument();
-      expect(screen.getByText('请输入内容主题')).toBeInTheDocument();
-    });
-    
+    // The validation should prevent generation, button should remain disabled
+    expect(generateButton).toBeDisabled();
     expect(mockOnGenerate).not.toHaveBeenCalled();
   });
 
@@ -110,12 +104,11 @@ describe('ContentGenerationPanel', () => {
     const mockOnGenerate = jest.fn();
     render(<ContentGenerationPanel {...defaultProps} onGenerate={mockOnGenerate} />);
     
-    // Fill in required fields
-    const platformSelects = screen.getAllByRole('combobox');
-    const platformSelect = platformSelects[0]; // First select is platform selector
-    fireEvent.change(platformSelect, { target: { value: 'xiaohongshu' } });
+    // Fill in form
+    const platformCard = screen.getByText('小红书').closest('.platform-card');
+    fireEvent.click(platformCard!);
     
-    const themeTextarea = screen.getByPlaceholderText(/例如：介绍人工智能/);
+    const themeTextarea = screen.getByPlaceholderText(/例如：/);
     fireEvent.change(themeTextarea, { target: { value: '人工智能在教育领域的应用' } });
     
     await waitFor(() => {
@@ -129,17 +122,18 @@ describe('ContentGenerationPanel', () => {
     render(<ContentGenerationPanel {...defaultProps} onGenerate={mockOnGenerate} />);
     
     // Fill in form
-    const platformSelects = screen.getAllByRole('combobox');
-    const platformSelect = platformSelects[0]; // First select is platform selector
-    fireEvent.change(platformSelect, { target: { value: 'xiaohongshu' } });
+    const platformCard = screen.getByText('小红书').closest('.platform-card');
+    fireEvent.click(platformCard!);
     
-    const themeTextarea = screen.getByPlaceholderText(/例如：介绍人工智能/);
+    const themeTextarea = screen.getByPlaceholderText(/例如：/);
     fireEvent.change(themeTextarea, { target: { value: '人工智能在教育领域的应用' } });
     
-    const lengthSelect = screen.getByDisplayValue('中等 (200-500字)');
+    // Get select elements by their container
+    const selects = screen.getAllByRole('combobox');
+    const lengthSelect = selects[0]; // First select is length
     fireEvent.change(lengthSelect, { target: { value: 'long' } });
     
-    const styleSelect = screen.getByDisplayValue('专业');
+    const styleSelect = selects[1]; // Second select is style
     fireEvent.change(styleSelect, { target: { value: 'casual' } });
     
     // Submit form
@@ -269,16 +263,21 @@ describe('ContentGenerationPanel', () => {
     );
     
     // Fill required fields
-    const platformSelects = screen.getAllByRole('combobox');
-    const platformSelect = platformSelects[0]; // First select is platform selector
-    fireEvent.change(platformSelect, { target: { value: 'xiaohongshu' } });
+    const platformCard = screen.getByText('小红书').closest('.platform-card');
+    fireEvent.click(platformCard!);
     
-    const themeTextarea = screen.getByPlaceholderText(/例如：介绍人工智能/);
-    fireEvent.change(themeTextarea, { target: { value: '测试主题' } });
+    const themeTextarea = screen.getByPlaceholderText(/例如：/);
+    fireEvent.change(themeTextarea, { target: { value: '测试主题内容，这是一个足够长的主题描述' } });
     
     // Enable current note inclusion
     const checkbox = screen.getByRole('checkbox');
     fireEvent.click(checkbox);
+    
+    // Wait for form to be valid
+    await waitFor(() => {
+      const generateButton = screen.getByText('生成内容');
+      expect(generateButton).not.toBeDisabled();
+    });
     
     // Submit
     const generateButton = screen.getByText('生成内容');
@@ -299,13 +298,14 @@ describe('ContentGenerationPanel', () => {
   it('shows character count and warning', () => {
     render(<ContentGenerationPanel {...defaultProps} />);
     
-    const themeTextarea = screen.getByPlaceholderText(/例如：介绍人工智能/);
+    const themeTextarea = screen.getByPlaceholderText(/例如：/);
     const longText = 'a'.repeat(460); // Over 90% of 500 to trigger warning
     
     fireEvent.change(themeTextarea, { target: { value: longText } });
     
-    expect(screen.getByText('460/500')).toBeInTheDocument();
-    expect(screen.getByText('460/500')).toHaveClass('char-count warning');
+    expect(screen.getByText('460')).toBeInTheDocument();
+    expect(screen.getByText('/500')).toBeInTheDocument();
+    expect(screen.getByText('460')).toHaveClass('char-count warning');
   });
 
   it('handles keyboard shortcuts', () => {
@@ -323,5 +323,40 @@ describe('ContentGenerationPanel', () => {
     // Test Escape key
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(mockOnClose).toHaveBeenCalled();
+  });
+
+  it('displays default values correctly', () => {
+    const defaultProps: ContentGenerationPanelProps = {
+      onGenerate: jest.fn(),
+      platforms: mockPlatforms,
+      defaultTheme: '测试默认主题',
+      defaultContentLength: 'long',
+      defaultWritingStyle: 'casual',
+      defaultKeywords: ['AI', '测试'],
+      defaultIncludeCurrentNote: true,
+      plugin: mockPlugin
+    };
+
+    render(<ContentGenerationPanel {...defaultProps} />);
+    
+    // Check theme input
+    const themeTextarea = screen.getByDisplayValue('测试默认主题');
+    expect(themeTextarea).toBeInTheDocument();
+    
+    // Check select values
+    const selects = screen.getAllByRole('combobox');
+    const lengthSelect = selects[0] as HTMLSelectElement;
+    const styleSelect = selects[1] as HTMLSelectElement;
+    
+    expect(lengthSelect.value).toBe('long');
+    expect(styleSelect.value).toBe('casual');
+    
+    // Check keywords
+    expect(screen.getByText('AI')).toBeInTheDocument();
+    expect(screen.getByText('测试')).toBeInTheDocument();
+    
+    // Check checkbox
+    const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
   });
 }); 

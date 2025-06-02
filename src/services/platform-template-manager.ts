@@ -415,23 +415,24 @@ export class PlatformTemplateManager {
    * 获取模板统计信息
    */
   getStatistics(): TemplateStatistics {
+    const totalTemplates = this.templates.size;
     const templatesPerPlatform: Record<PlatformId, number> = {
       xiaohongshu: 0,
       twitter: 0,
       wechat: 0,
       blog: 0,
-      toutiao: 0
+      toutiao: 0,
+      zhihu: 0,
+      douyin: 0
     };
-
-    for (const [platformId] of this.templates) {
-      templatesPerPlatform[platformId] = 1;
-    }
-
-    // 计算平均性能指标
     let totalLoadTime = 0;
     let totalRenderTime = 0;
     let totalCacheHits = 0;
     let totalOperations = 0;
+
+    for (const [platformId] of this.templates) {
+      templatesPerPlatform[platformId] = 1;
+    }
 
     for (const metrics of this.performanceMetrics.values()) {
       totalLoadTime += metrics.loadTime;
@@ -441,7 +442,7 @@ export class PlatformTemplateManager {
     }
 
     return {
-      totalTemplates: this.templates.size,
+      totalTemplates,
       templatesPerPlatform,
       averageLoadTime: totalOperations > 0 ? totalLoadTime / totalOperations : 0,
       averageRenderTime: totalOperations > 0 ? totalRenderTime / totalOperations : 0,

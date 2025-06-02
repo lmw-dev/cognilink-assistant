@@ -1,32 +1,37 @@
 /**
- * TOM-118: 平台内容分析器
- * 提供平台特性分析、受众分析、优化建议等功能
+ * TOM-118 & TOM-119: 平台内容分析器
+ * 提供平台特性分析、受众分析、优化建议、平台规则提取、趋势分析等功能
  */
 
 import { AIService } from '../AIService';
+import { EnhancedPromptTemplateService } from './EnhancedPromptTemplateService'; // TOM-119
+import { ContentQualityEvaluator } from '../content-quality-evaluator'; // TOM-119 (assuming from TOM-111/TOM-118 context)
 import {
   PlatformCharacteristicsAnalysis,
   AudienceAnalysis,
-  PlatformOptimization,
+  PlatformOptimization, // This might be replaced by OptimizedContent or be an internal type
   AdaptationSuggestion,
   PopularContentAnalysis,
   PlatformComplianceReport,
   SuccessPattern,
   AIDetectionError,
   AIDetectionErrorType,
-  PlatformRule
+  PlatformRule,
+  PlatformTrends, // TOM-119
+  OptimizedContent // TOM-119
 } from '../../types/ai-detection';
 import { SocialMediaPlatform, PlatformId } from '../../types/social-media';
 
 /**
  * 平台内容分析器
- * 分析内容与平台特性的匹配度，提供优化建议
+ * 分析内容与平台特性的匹配度，提供优化建议，并支持平台特化模板库
  */
 export class PlatformContentAnalyzer {
-  private aiService: AIService;
+  // private aiService: AIService; // Retained for now, assess full removal later
   private cache: Map<string, any>;
   
-  // 平台特性权重配置
+  // Platform weights - existing code...
+  // ... existing code ...
   private readonly platformWeights: Record<PlatformId, {
     contentLength: number;
     emojiUsage: number;
@@ -35,11 +40,11 @@ export class PlatformContentAnalyzer {
     personalStyle: number;
   }> = {
     'xiaohongshu': {
-      contentLength: 0.2, // Length is important, but not as much as style
-      emojiUsage: 0.25,    // Emojis are very common
-      hashtagUsage: 0.2,  // Hashtags are key for discovery
-      interactivity: 0.2, // Encouraging comments, saves
-      personalStyle: 0.15 // Authenticity and personal touch
+      contentLength: 0.2, 
+      emojiUsage: 0.25,    
+      hashtagUsage: 0.2,  
+      interactivity: 0.2, 
+      personalStyle: 0.15 
     },
     'twitter': {
       contentLength: 0.4,
@@ -85,11 +90,155 @@ export class PlatformContentAnalyzer {
     }
   };
 
-  constructor(aiService: AIService) {
-    this.aiService = aiService;
+  // Add a private member to store some predefined rules
+  private predefinedPlatformRules: Record<PlatformId, PlatformRule[]> = {
+    xiaohongshu: [
+      {
+        id: 'xhs-length-title',
+        name: '小红书标题长度',
+        description: '标题建议20字以内，突出重点，善用吸睛词汇和表情。',
+        type: 'format',
+        importance: 'important',
+        validator: (content: string) => true, // Placeholder, as title is not passed to validator
+        suggestion: '优化标题，使其更简洁且吸引人，控制在20字以内。',
+        examples: ['🔥爆款预警 | 夏日不脱妆粉底液实测！', 'OOTD｜梨形身材夏日显瘦穿搭指南✨']
+      },
+      {
+        id: 'xhs-image-quality',
+        name: '图片/视频质量',
+        description: '首图必须清晰、美观、高质量，内容图文并茂。',
+        type: 'format', // Changed from 'visual' based on linter error for PlatformRule.type
+        importance: 'critical',
+        validator: (content: string) => true, // Generic validator for now
+        suggestion: '确保首图和内容图片/视频清晰、美观，提升视觉效果。',
+        examples: ['（高质量美食图片）', '（精心剪辑的Vlog片段）']
+      },
+      {
+        id: 'xhs-hashtag-usage',
+        name: '话题标签使用',
+        description: '合理使用3-5个相关热门话题标签，增加曝光。',
+        type: 'format',
+        importance: 'important',
+        validator: (content: string) => (content.match(/#/g) || []).length >= 1 && (content.match(/#/g) || []).length <= 5,
+        suggestion: '使用3-5个与内容相关的话题标签，参与热门话题。',
+        examples: ['#我的日常 #美食探店 #小红书探店']
+      }
+    ],
+    twitter: [
+      {
+        id: 'twitter-char-limit',
+        name: '推文字符限制',
+        description: '单条推文严格控制在280字符以内（英文环境下）。',
+        type: 'format',
+        importance: 'critical',
+        validator: (content: string) => content.length <= 280,
+        suggestion: '内容需简洁明了，控制在280字符以内，或使用Thread拆分。',
+        examples: ['Just released a new feature for our app! Check it out: [link] #NewRelease']
+      },
+      {
+        id: 'twitter-media-engagement',
+        name: '多媒体使用',
+        description: '适当使用图片、GIF或短视频可以提高互动率。',
+        type: 'format', // Changed from 'visual' based on linter error for PlatformRule.type
+        importance: 'recommended',
+        validator: (content: string) => true, // Generic validator for now
+        suggestion: '在推文中加入相关的图片、GIF或短视频以吸引注意力。',
+        examples: ['（一张相关的meme图）', '（产品功能演示短视频）']
+      }
+    ]
+    // Add more platforms and rules as needed
+  };
+
+  constructor(
+    private aiService: AIService, // Retained for now
+    private templateService: EnhancedPromptTemplateService,
+    private qualityEvaluator: ContentQualityEvaluator
+  ) {
+    // this.aiService = aiService; // Original assignment if aiService wasn't made private in constructor args
     this.cache = new Map();
   }
 
+  // =========== TOM-119 New Public Methods ===========
+
+  async extractPlatformRules(platform: SocialMediaPlatform): Promise<PlatformRule[]> {
+    if (this.predefinedPlatformRules[platform.id]) {
+      return Promise.resolve(this.predefinedPlatformRules[platform.id]);
+    }
+    console.warn(`No predefined rules for platform ${platform.id} in extractPlatformRules. Returning generic advice.`);
+    // Return a generic rule or empty array if no specific rules are found
+    return Promise.resolve([
+      {
+        id: 'generic-content-quality',
+        name: '内容质量',
+        description: '确保内容原创、有价值，并且符合平台社区准则。',
+        type: 'content',
+        importance: 'critical',
+        validator: (content: string) => true, // Added placeholder validator
+        suggestion: '创作高质量的原创内容，遵守平台规定。',
+        examples: []
+      }
+    ]);
+  }
+
+  async analyzePlatformTrends(platform: SocialMediaPlatform, timeframe: string): Promise<PlatformTrends> {
+    // TODO: Implement logic for TOM-119
+    // Could adapt/use the existing private `identifyContentTrends`
+    console.warn(`analyzePlatformTrends for ${platform.id} (timeframe: ${timeframe}) not fully implemented yet.`);
+    return {
+      platformId: platform.id,
+      trends: [],
+      lastUpdated: new Date()
+    };
+  }
+
+  async generatePlatformSpecificPrompt(basePrompt: string, platform: SocialMediaPlatform): Promise<string> {
+    // TODO: Implement logic for TOM-119
+    // Will use this.templateService to get an AdvancedPromptTemplate for the platform
+    // Then combine its layers with basePrompt
+    console.warn(`generatePlatformSpecificPrompt for ${platform.id} not fully implemented yet.`);
+    return `[Generated prompt for ${platform.name} based on: ${basePrompt}]`;
+  }
+
+  async optimizeContentForPlatform(content: string, platform: SocialMediaPlatform): Promise<OptimizedContent> {
+    // TODO: Implement logic for TOM-119. This will evolve from generateOptimization.
+    // It should return an OptimizedContent object.
+    console.warn(`optimizeContentForPlatform for ${platform.id} not fully implemented yet.`);
+    // For now, let's call the old generateOptimization and adapt its output or return a placeholder
+    const oldOptimization = await this.generateOptimization(content, platform);
+    return {
+      originalContent: content,
+      optimizedContent: content, // Placeholder
+      platformId: platform.id,
+      changes: oldOptimization.modifications.map(mod => ({
+        type: mod.type,
+        description: mod.description,
+        originalExcerpt: mod.before,
+        optimizedExcerpt: mod.after,
+        impactScore: mod.impact
+      })),
+      scoreBefore: oldOptimization.currentScore,
+      scoreAfter: oldOptimization.optimizedScore,
+      optimizationSummary: 'Placeholder summary for TOM-119.',
+      confidence: oldOptimization.confidence
+    };
+  }
+  
+  // =========== Modified/Promoted Public Methods (TOM-119) ===========
+
+  public async identifySuccessPatterns(platform: SocialMediaPlatform, category: string): Promise<SuccessPattern[]> {
+    // Logic from existing private analyzeSuccessPatterns, adapted for async and SocialMediaPlatform input
+    // TODO: Fully implement and test this adapted logic for TOM-119
+    console.warn(`identifySuccessPatterns for ${platform.id}, category ${category} called. Original private logic needs full async adaptation.`);
+    return this.analyzeSuccessPatternsInternal(platform.id, category); // Call a refactored internal version
+  }
+
+  public async calculateAudienceAlignment(content: string, platform: SocialMediaPlatform): Promise<number> {
+    // Logic from existing private calculateAudienceAlignment, wrapped in Promise
+    // TODO: Fully implement and test this adapted logic for TOM-119
+    console.warn(`calculateAudienceAlignment for ${platform.id} called. Original private logic needs full async adaptation.`);
+    return this.calculateAudienceAlignmentInternal(content, platform); // Call a refactored internal version
+  }
+  
   /**
    * 分析平台特性匹配度
    */
@@ -105,18 +254,14 @@ export class PlatformContentAnalyzer {
     }
 
     try {
-      // Use the new calculateContentFit method for consistency and to include specific boosts
       const contentFit = this.calculateContentFit(content, platform); 
-
-      // Keep other calculations as they were, assuming they are not the primary cause of current failures
-      const platformWeights = this.platformWeights[platform.id] || this.platformWeights['xiaohongshu'];
       const lengthFit = this.calculateLengthFit(content, platform);
       const emojiFit = this.calculateEmojiFit(content, platform);
       const hashtagFit = this.calculateHashtagFit(content, platform);
       const interactivityFit = this.calculateInteractivityFit(content, platform);
       const personalStyleFit = this.calculatePersonalStyleFit(content, platform);
       
-      const audienceAlignment = this.calculateAudienceAlignment(content, platform);
+      const audienceAlignment = await this.calculateAudienceAlignment(content, platform); // This await is correct
       const featureCompliance = this.calculateFeatureCompliance(content, platform);
       const engagementPotential = this.calculateEngagementPotential(content, platform);
       const competitiveness = this.calculateCompetitiveness(content, platform);
@@ -203,7 +348,8 @@ export class PlatformContentAnalyzer {
   }
 
   /**
-   * 生成平台优化建议
+   * 生成平台优化建议 (To be replaced by optimizeContentForPlatform)
+   * @deprecated Prefer optimizeContentForPlatform for TOM-119 compatibility
    */
   async generateOptimization(
     content: string,
@@ -290,158 +436,84 @@ export class PlatformContentAnalyzer {
   }
 
   /**
-   * 平台适配建议
-   * 比较两个平台特性，提供内容适配策略
+   * 平台适配建议 (Modified for TOM-119)
    */
   async suggestPlatformAdaptation(
     content: string,
-    fromPlatformId: PlatformId,
-    toPlatformId: PlatformId
+    fromPlatform: SocialMediaPlatform, // Changed from PlatformId for TOM-119
+    toPlatform: SocialMediaPlatform   // Changed from PlatformId for TOM-119
   ): Promise<AdaptationSuggestion> {
     if (!content || content.trim().length === 0) {
       throw new AIDetectionError(
-        'Content cannot be empty for adaptation suggestion.',
+        '内容不能为空',
         AIDetectionErrorType.INVALID_CONTENT
       );
     }
-    if (fromPlatformId === toPlatformId) {
+    if (!fromPlatform || !toPlatform) {
         throw new AIDetectionError(
-            'From and To platforms cannot be the same for adaptation.',
+            '源平台和目标平台均不能为空',
             AIDetectionErrorType.INVALID_PLATFORM
         );
     }
 
     try {
-      const fromFeatures = this.analyzePlatformFeatures(fromPlatformId);
-      const toFeatures = this.analyzePlatformFeatures(toPlatformId);
+      // Get features for both platforms
+      // The original `analyzePlatformFeatures` might need to be adapted if it expects PlatformId
+      const fromFeatures = this.analyzePlatformFeatures(fromPlatform.id); 
+      const toFeatures = this.analyzePlatformFeatures(toPlatform.id);
 
-      if (!fromFeatures || !toFeatures) {
-        throw new AIDetectionError(
-            `Failed to retrieve features for one or both platforms: ${fromPlatformId}, ${toPlatformId}`,
-            AIDetectionErrorType.PLATFORM_ANALYSIS_ERROR
-        );
-      }
-
+      // Generate adaptation strategy (this logic might need review for TOM-119)
       const adaptationStrategy = this.developAdaptationStrategy(fromFeatures, toFeatures);
-      
-      let transformedLength = content.length;
-      if (toFeatures.idealLength) {
-        transformedLength = toFeatures.idealLength;
-      }
-      if (fromPlatformId === 'blog' && toPlatformId === 'xiaohongshu') {
-        transformedLength = Math.min(content.length * 0.4, 500, toFeatures.idealLength || 500); // Ensure it also respects target ideal length
-      }
-      transformedLength = Math.max(30, Math.round(transformedLength));
 
-      const contentTransformation = {
-        length: { from: content.length, to: transformedLength },
-        style: { from: fromFeatures.stylePreference, to: toFeatures.stylePreference },
-        keywords: {
-          add: toFeatures.commonKeywords?.slice(0, 2) || [], 
-          remove: fromFeatures.commonKeywords?.filter((kw: string) => !toFeatures.commonKeywords?.includes(kw))?.slice(0,1) || []
+      // Identify required changes (this logic might need review)
+      // For simplicity, let's assume some mock changes for now for the stub
+      const requiredChanges: Array<{
+        aspect: string;
+        description: string;
+        from?: any;
+        to?: any;
+        reason?: string;
+        examples?: string[];
+      }> = [
+        {
+          aspect: 'length',
+          description: `Adjust content length from ${fromPlatform.name} (max: ${fromPlatform.maxLength || 'N/A'}) to ${toPlatform.name} (max: ${toPlatform.maxLength || 'N/A'})`,
+          from: content.length,
+          to: toPlatform.maxLength || content.length // Simplistic target
         },
-        multimedia: {
-          from: fromFeatures.multimediaFocus,
-          to: toFeatures.multimediaFocus,
-          suggestion: fromFeatures.multimediaFocus !== toFeatures.multimediaFocus ?
-            `Consider adapting multimedia from ${fromFeatures.multimediaFocus} to ${toFeatures.multimediaFocus}` :
-            'Multimedia strategy seems consistent.'
+        {
+          aspect: 'style',
+          description: `Adapt writing style for ${toPlatform.name}`,
+          reason: `Based on typical style keywords: ${toPlatform.styleKeywords?.join(', ') || 'N/A'}`
         }
-      };
+      ];
       
-      const requiredChanges: Array<{ aspect: string; description: string; from?: any; to?: any; reason?: string; examples?: string[] }> = [];
-      requiredChanges.push({ aspect: 'length', description: `Adjust length from ${content.length} to ${transformedLength}.`, reason: 'Platform length preference'});
-      requiredChanges.push({ aspect: 'style', description: `Change style from ${fromFeatures.stylePreference} to ${toFeatures.stylePreference}.`, reason: 'Platform style preference'});
-      // Add more detailed changes from adaptationStrategy
-      adaptationStrategy.split('\n').forEach(line => {
-        if (line.trim().length > 0 && !requiredChanges.some(rc => rc.description.includes(line.substring(0,20)))) { // Check more of the line to avoid false negatives
-            const aspectMatch = line.match(/^(.*?):/);
-            requiredChanges.push({
-                aspect: aspectMatch ? aspectMatch[1].toLowerCase().replace(/\s+/g, '_') : 'general_adaptation',
-                description: line,
-                reason: 'Specific adaptation based on feature differences.'
-            });
-        }
-      });
+      // For content transformation (mock)
+      const contentTransformation = {
+        length: { from: content.length, to: Math.min(content.length, toPlatform.maxLength || content.length) },
+        style: { from: 'general', to: toPlatform.styleKeywords ? toPlatform.styleKeywords[0] || 'platform-specific' : 'platform-specific' }
+      };
 
+      // Predict success and difficulty (mock)
       const estimatedSuccess = this.predictAdaptationSuccess(requiredChanges, contentTransformation, fromFeatures, toFeatures);
-
-      let difficulty: 'easy' | 'moderate' | 'difficult' = 'moderate';
-      const featureDifferenceScore = Math.abs(fromFeatures.contentFocusScore - toFeatures.contentFocusScore);
-
-      if (requiredChanges.length > 4 || featureDifferenceScore > 40) {
-        difficulty = 'difficult';
-      } else if (requiredChanges.length > 2 || featureDifferenceScore > 25){
-        difficulty = 'moderate';
-      } else {
-        difficulty = 'easy';
-      }
-      // Specific case for academic to highly casual social media
-      if (fromFeatures.contentType === 'academic_paper' && ['xiaohongshu', 'douyin', 'twitter'].includes(toPlatformId)) {
-        difficulty = 'difficult';
-      }
-      // Make adaptation from blog to xiaohongshu difficult explicitly
-      if (fromPlatformId === 'blog' && toPlatformId === 'xiaohongshu') {
-        difficulty = 'difficult';
-      }
-
+      const difficulty = this.getAdaptationDifficulty(fromPlatform.id, toPlatform.id, [], fromFeatures, toFeatures); // Pass empty array for requiredChanges if not used by getAdaptationDifficulty like this
 
       return {
-        fromPlatform: fromPlatformId,
-        toPlatform: toPlatformId,
+        fromPlatform: fromPlatform.id, // Suggestion: fromPlatform and toPlatform should probably store the full SocialMediaPlatform object or just ID consistently
+        toPlatform: toPlatform.id,
         adaptationStrategy,
         requiredChanges,
         contentTransformation,
         estimatedSuccess,
         difficulty,
-        confidence: Math.round(Math.random() * 20 + 75) 
-      };
-
-    } catch (error: any) { // Ensured catch block is correctly structured with type for error
-      throw new AIDetectionError(
-        `平台适配建议生成失败: ${error.message}`,
-        AIDetectionErrorType.ADAPTATION_ERROR
-      );
-    }
-  }
-
-  /**
-   * 分析热门内容趋势
-   */
-  async analyzePopularContent(
-    platformId: PlatformId,
-    category: string
-  ): Promise<PopularContentAnalysis> {
-    try {
-      // 模拟热门内容数据分析
-      const trendsIdentified = this.identifyContentTrends(platformId, category);
-      
-      // 分析成功模式
-      const successPatterns = this.analyzeSuccessPatterns(platformId, category);
-      
-      // 推荐元素
-      const recommendedElements = this.getRecommendedElements(platformId, category);
-      
-      // 避免元素
-      const avoidedElements = this.getAvoidedElements(platformId, category);
-      
-      // 时效性相关度
-      const timelineRelevance = this.calculateTimelineRelevance(platformId, category);
-
-      return {
-        platformId,
-        category,
-        trendsIdentified,
-        successPatterns,
-        recommendedElements,
-        avoidedElements,
-        timelineRelevance
+        confidence: 0.75 // Placeholder confidence
       };
 
     } catch (error) {
       throw new AIDetectionError(
-        `热门内容分析失败: ${error.message}`,
-        AIDetectionErrorType.CONTENT_ANALYSIS_ERROR
+        `平台适配建议生成失败: ${error.message}`,
+        AIDetectionErrorType.ADAPTATION_ERROR,
+        { fromPlatform: fromPlatform.id, toPlatform: toPlatform.id }
       );
     }
   }
@@ -1340,37 +1412,37 @@ export class PlatformContentAnalyzer {
     switch (platformId) {
       case 'xiaohongshu':
         patterns.push(
-          { patternType: 'content', description: '高质量的原创图片/视频 + 详细的个人体验分享。', examples: ['"我的周末VLOG | 咖啡探店笔记"', '"新手友好！X款精华红黑榜"'], successRate: 85, frequency: 0.8, applicability: 0.9, implementation: 'Focus on visual and personal touch.' },
-          { patternType: 'structure', description: '使用吸引人的封面图和标题，内容分段清晰，善用表情符号和热门标签。', examples: ['"🔥爆款预警 | 这个夏天离不开的防晒霜"'], successRate: 80, frequency: 0.85, applicability: 0.9, implementation: 'Optimize presentation.' } // Was 'format'
+          { patternId: 'xhs-content-1', platform: platformId, elements: ['visual', 'personal_touch'], description: '高质量的原创图片/视频 + 详细的个人体验分享。', examples: ['"我的周末VLOG | 咖啡探店笔记"', '"新手友好！X款精华红黑榜"'], score: 85, confidence: 0.9 },
+          { patternId: 'xhs-structure-1', platform: platformId, elements: ['cover_image', 'title', 'emojis', 'hashtags'], description: '使用吸引人的封面图和标题，内容分段清晰，善用表情符号和热门标签。', examples: ['"🔥爆款预警 | 这个夏天离不开的防晒霜"'], score: 80, confidence: 0.85 }
         );
         if (lowerCategory.includes('美妆') || lowerCategory.includes('护肤') || lowerCategory.includes('lifestyle') || lowerCategory.includes('beauty')) { 
-            patterns.push({ patternType: 'interaction', description: '在评论区积极回复用户问题，发起小话题讨论。', successRate: 75, frequency: 0.7, applicability: 0.8, examples: ['"大家夏天都用什么防晒？"', '"评论区聊聊你的护肤心得～"'], implementation: 'Foster community.'});
-            patterns.push({ patternType: 'content', description: '美妆教程或产品测评，突出真实使用效果。', examples:['GRWM', 'X品牌口红全试色'], successRate: 88, frequency: 0.75, applicability: 0.9, implementation: 'Show, don\'t just tell.' });
+            patterns.push({ patternId: 'xhs-interaction-1', platform: platformId, category: lowerCategory, elements: ['comments', 'discussion'], description: '在评论区积极回复用户问题，发起小话题讨论。', score: 75, confidence: 0.8, examples: ['"大家夏天都用什么防晒？"', '"评论区聊聊你的护肤心得～"']});
+            patterns.push({ patternId: 'xhs-content-2', platform: platformId, category: lowerCategory, elements: ['tutorial', 'review', 'real_effect'], description: '美妆教程或产品测评，突出真实使用效果。', examples:['GRWM', 'X品牌口红全试色'], score: 88, confidence: 0.9 });
         } else { 
-             patterns.push({ patternType: 'content', description: '分享有价值的通用小红书经验和技巧。', examples:['我的学习日常', 'XX使用心得'], successRate: 70, frequency: 0.6, applicability: 0.7, implementation: 'Provide value.' });
+             patterns.push({ patternId: 'xhs-content-3', platform: platformId, category: lowerCategory, elements: ['experience', 'tips'], description: '分享有价值的通用小红书经验和技巧。', examples:['我的学习日常', 'XX使用心得'], score: 70, confidence: 0.7 });
         }
         break;
       case 'twitter':
         patterns.push(
-          { patternType: 'content', description: '简洁明了的核心观点 + 相关新闻链接或截图。', examples: ['"最新AI研究突破：模型效率提升200% [链接] #AI #Tech"'], successRate: 80, frequency: 0.8, applicability: 0.85, implementation: 'Be concise and informative.' },
-          { patternType: 'structure', description: '使用Thread（推文串）来详细阐述复杂主题。', examples: ['"关于XX事件的深度分析 1/N"'], successRate: 78, frequency: 0.65, applicability: 0.8, implementation: 'Use threads for longer content.' } // Was 'format'
+          { patternId: 'twitter-content-1', platform: platformId, elements: ['core_point', 'link', 'screenshot'], description: '简洁明了的核心观点 + 相关新闻链接或截图。', examples: ['"最新AI研究突破：模型效率提升200% [链接] #AI #Tech"'], score: 80, confidence: 0.85 },
+          { patternId: 'twitter-structure-1', platform: platformId, elements: ['thread'], description: '使用Thread（推文串）来详细阐述复杂主题。', examples: ['"关于XX事件的深度分析 1/N"'], score: 78, confidence: 0.8 }
         );
          if (lowerCategory.includes('tech') || lowerCategory.includes('news')) {
-            patterns.push({ patternType: 'timing', description: '快速分享突发新闻或即时评论。', successRate: 82, frequency: 0.9, applicability: 0.9, examples: ['"刚发生的XX事件快讯！"', '"我对这次发布会的看法是..."'], implementation: 'Be timely.'});
+            patterns.push({ patternId: 'twitter-timing-1', platform: platformId, category: lowerCategory, elements: ['breaking_news', 'instant_comment'], description: '快速分享突发新闻或即时评论。', score: 82, confidence: 0.9, examples: ['"刚发生的XX事件快讯！"', '"我对这次发布会的看法是..."']});
         }
         break;
       case 'blog':
          patterns.push(
-            { patternType: 'content', description: '提供深入、结构化的长文内容，包含独特见解或详细教程。', examples: ['"深度学习入门指南：从理论到实践"'], successRate: 88, frequency: 0.7, applicability: 0.9, implementation: 'Provide in-depth value.' },
-            { patternType: 'structure', description: '优化关键词和元数据以提高搜索引擎可见性。', successRate: 70, frequency: 0.8, applicability: 0.75, examples: ['使用长尾关键词', '撰写吸引人的meta description'], implementation: 'Focus on SEO.' } 
+            { patternId: 'blog-content-1', platform: platformId, elements: ['in_depth', 'structured', 'unique_insight', 'tutorial'], description: '提供深入、结构化的长文内容，包含独特见解或详细教程。', examples: ['"深度学习入门指南：从理论到实践"'], score: 88, confidence: 0.9 },
+            { patternId: 'blog-structure-1', platform: platformId, elements: ['seo', 'keywords', 'meta_data'], description: '优化关键词和元数据以提高搜索引擎可见性。', score: 70, confidence: 0.75, examples: ['使用长尾关键词', '撰写吸引人的meta description'] } 
         );
         break;
       default: 
-         patterns.push({ patternType: 'content', description: '提供有价值的信息或独特的观点，清晰易懂。', examples: ['"如何提高学习效率的5个技巧"'], successRate: 70, frequency: 0.6, applicability: 0.7, implementation: 'Deliver value clearly.' });
+         patterns.push({ patternId: 'default-content-1', platform: platformId, elements: ['valuable_info', 'clear_expression'], description: '提供有价值的信息或独特的观点，清晰易懂。', examples: ['"如何提高学习效率的5个技巧"'], score: 70, confidence: 0.7 });
     }
     
     if (patterns.length === 0) {
-        patterns.push({ patternType: 'content', description: `为${platformId}平台${category}类别创作吸引人的内容。`, examples: ['示例内容...'], successRate: 60, frequency: 0.5, applicability: 0.6, implementation: 'Ensure relevance and appeal.' });
+        patterns.push({ patternId: 'fallback-pattern-1', platform: platformId, category: category, elements: ['general_appeal'], description: `为${platformId}平台${category}类别创作吸引人的内容。`, examples: ['示例内容...'], score: 60, confidence: 0.6 });
     }
 
     return patterns;
@@ -1615,7 +1687,7 @@ export class PlatformContentAnalyzer {
       this.calculatePersonalStyleFit(content, platform)
     ) / 5;
 
-    const audience = this.calculateAudienceAlignment(content, platform);
+    const audience = this.calculateAudienceAlignmentInternal(content, platform); // Changed to internal synchronous version
     const features = this.calculateFeatureCompliance(content, platform);
 
     let score = (characteristics * 0.4) + (audience * 0.3) + (features * 0.3);
@@ -1750,5 +1822,93 @@ export class PlatformContentAnalyzer {
     }
 
     return difficulty;
+  }
+
+  // Private methods section
+  // ... existing code ...
+
+  // Refactored internal methods for TOM-119 public async wrappers
+  private analyzeSuccessPatternsInternal(platformId: PlatformId, category: string): SuccessPattern[] {
+    const patterns: SuccessPattern[] = [];
+
+    if (platformId === 'xiaohongshu' && category === 'product-review') {
+      patterns.push({
+        patternId: 'xhs-review-authentic-opener',
+        description: '使用真实、引人入胜的开场白，如"绝了"、"挖到宝了"。',
+        platform: 'xiaohongshu',
+        category: 'product-review',
+        elements: ['亲切称呼', '惊喜语气', '表情符号开头'],
+        score: 85,
+        examples: ['宝子们！这个我真的要吹爆！', 'OMG姐妹们！我挖到神仙好物了！✨'],
+        confidence: 0.9
+      });
+      patterns.push({
+        patternId: 'xhs-review-painpoint-solution',
+        description: '提及用户痛点并展示产品如何解决该痛点。',
+        platform: 'xiaohongshu',
+        category: 'product-review',
+        elements: ['痛点描述', '产品功效结合', '前后对比（暗示）'],
+        score: 90,
+        examples: ['换季皮肤干到起皮？这个面霜简直是沙漠皮救星！', '熬夜党必备！告别暗沉就靠它！'],
+        confidence: 0.92
+      });
+      patterns.push({
+        patternId: 'xhs-review-visual-detail',
+        description: '注重图片/视频质量，细节展示清晰，多图文结合。',
+        platform: 'xiaohongshu',
+        category: 'product-review',
+        elements: ['高清图片', '多角度展示', '使用体验场景化', '视频内容'],
+        score: 80,
+        examples: ['(图片：产品包装、上手质地、使用效果图)', '视频笔记：开箱+第一印象+7天效果反馈'],
+        confidence: 0.88
+      });
+    }
+    if (platformId === 'twitter' && category === 'opinion-sharing') {
+      patterns.push({
+        patternId: 'twitter-tech-hook-question',
+        description: '以一个引人深思的问题或大胆的断言作为Thread的开篇。 ',
+        platform: 'twitter',
+        category: 'opinion-sharing',
+        elements: ['设问句', '争议性观点', '简洁表达', '序号/表情引导'],
+        score: 88,
+        examples: ['AI真的会取代程序员吗？我的看法是... (1/N)', 'Web3的未来，是泡沫还是革命？🧵👇'],
+        confidence: 0.85
+      });
+      patterns.push({
+        patternId: 'twitter-tech-concise-points',
+        description: 'Thread中每条推文观点明确、论据简洁，用词精准。',
+        platform: 'twitter',
+        category: 'opinion-sharing',
+        elements: ['短句', '核心论点突出', '数据/事实支撑', '避免冗余'],
+        score: 85,
+        examples: ['2. 数据显示，X技术的采用率在过去一年增长了Y%。', '3. 这意味着开发者需要关注Z技能的学习。'],
+        confidence: 0.82
+      });
+    }
+    // TODO: Add more patterns for other platforms and categories (e.g., WeChat, Blog, Toutiao)
+    console.warn(`analyzeSuccessPatternsInternal executed for ${platformId}, category ${category}. Found ${patterns.length} patterns.`);
+    return patterns;
+  }
+
+  private calculateAudienceAlignmentInternal(content: string, platform: SocialMediaPlatform): number {
+    // Existing logic of calculateAudienceAlignment, now private and non-async
+    let score = 60; // Base score
+    const keywords = platform.styleKeywords || [];
+
+    if (platform.id === 'xiaohongshu') {
+      if (content.includes('姐妹') || content.includes('宝子')) score += 15;
+      if (keywords.some(kw => content.includes(kw))) score += 10;
+      if (content.length < 100) score -=10; // Too short for typical XHS detailed post
+    } else if (platform.id === 'twitter') {
+      if (content.length > 280 * 3) score -= 20; // Very long thread
+      if (content.includes('#')) score += 5;
+    } else if (platform.id === 'blog'){
+        if (content.length < 500) score -=15; // Too short for a blog post
+        if (content.includes('##') || content.includes('###')) score +=10; // Has markdown headings
+    }
+    
+    score = Math.max(0, Math.min(100, score));
+    console.warn(`calculateAudienceAlignmentInternal executed for ${platform.id}. Score: ${score}`);
+    return score;
   }
 } 

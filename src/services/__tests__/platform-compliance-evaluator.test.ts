@@ -74,6 +74,34 @@ describe('PlatformComplianceEvaluator', () => {
         popularLanguage: true
       },
       features: ['rich_text', 'images', 'videos']
+    },
+    zhihu: {
+      id: 'zhihu',
+      name: '知乎',
+      maxLength: 50000,
+      styleKeywords: ['谢邀', '专业', '深度', '分析'],
+      requiredElements: ['structure', 'references', 'data'],
+      formatRules: {
+        professionalTone: true,
+        dataSupport: true,
+        referenceSection: true,
+        headingHierarchy: true
+      },
+      features: ['markdown', 'rich_text', 'images', 'links', 'code']
+    },
+    douyin: {
+      id: 'douyin',
+      name: '抖音',
+      maxLength: 150,
+      styleKeywords: ['热门', '挑战', '创意', 'BGM'],
+      requiredElements: ['video_script', 'music_suggestion', 'interaction_hook'],
+      formatRules: {
+        characterLimit: 150,
+        emojiDensity: 'medium',
+        interactionPrompt: true,
+        hashtagCount: {min: 1, max: 5}
+      },
+      features: ['short_video', 'music', 'effects', 'hashtags', 'live']
     }
   };
 

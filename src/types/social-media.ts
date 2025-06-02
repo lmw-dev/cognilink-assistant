@@ -4,7 +4,7 @@
  */
 
 // 平台标识符类型
-export type PlatformId = 'xiaohongshu' | 'twitter' | 'wechat' | 'blog' | 'toutiao';
+export type PlatformId = 'xiaohongshu' | 'twitter' | 'wechat' | 'blog' | 'toutiao' | 'zhihu' | 'douyin';
 
 // 社交媒体平台接口
 export interface SocialMediaPlatform {
@@ -15,6 +15,12 @@ export interface SocialMediaPlatform {
   requiredElements: string[];
   formatRules: FormatRules;
   features?: string[]; // 平台特性，如 'emoji', 'hashtag', 'interaction' 等
+  contentFormat?: {
+    maxContentLength: number;
+    maxTitleLength?: number;
+    allowedHashtags: number;
+    supportedFeatures: string[];
+  };
 }
 
 // 格式规则接口
@@ -23,8 +29,10 @@ export interface FormatRules {
   headingStyle?: string;
   paragraphLength?: string | { min: number; max: number };
   emojiDensity?: 'low' | 'medium' | 'high' | { min: number; max: number };
+  emojiUsage?: { min: number; max: number; preferred: number };
   hashtagStyle?: string;
   hashtagCount?: string | { min: number; max: number };
+  hashtagUsage?: { min: number; max: number; preferred: number };
   interactionPrompt?: boolean;
   threadSupport?: boolean;
   threadNumbering?: boolean;

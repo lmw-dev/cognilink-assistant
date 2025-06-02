@@ -248,54 +248,151 @@ export const toutiaoTemplate: PlatformTemplate = {
 
 特点：
 - 标题党风格，吸引点击
-- 内容通俗易懂，贴近大众
-- 热点话题敏感度高
-- 包含争议性观点引发讨论
-- 语言生动有趣，接地气
-- 适当使用网络流行语
+- 内容通俗易懂，适合大众阅读
+- 包含图片和视频元素
+- 紧跟社会热点和流行趋势
+- 语言接地气，有网感
 
 风格要求：
-- 开头抓人眼球，制造悬念
-- 内容有观点冲突或反转
-- 语言通俗易懂，贴近生活
-- 结尾引发思考和讨论
-- 适度使用网络流行语`,
-
+- 标题有悬念或争议性
+- 内容包含多个小节，每节简短
+- 多用疑问句和感叹句
+- 适当使用网络流行语
+- 结尾引导关注和分享`,
   userTemplate: `基于以下内容创作一篇头条号文章：
 
 主题：{topic}
 相关内容：{context}
 
 要求：
-1. 1000-2000字，通俗易懂
-2. 标题要有吸引力和争议性
-3. 开头要抓住读者注意力
-4. 内容要有观点冲突或反转
-5. 结尾要引发思考和讨论
-6. 适当使用网络流行语
-7. 每段80-150字，便于阅读
+1. 800-2000字，内容通俗易懂
+2. 标题吸引眼球，有悬念
+3. 包含多个小节，每节简短
+4. 适当使用网络流行语和表情符号
+5. 结尾引导关注和分享
+6. 插入2-3张相关图片（用[图片]标记）
 
-请确保内容有争议性但不违规，能引发热烈讨论。`,
-
-  styleKeywords: ['震惊', '揭秘', '真相', '内幕', '爆料', '反转', '热议', '争议'],
-  requiredElements: ['吸引标题', '争议观点', '热点话题', '讨论引导'],
+请确保内容真实，不传播谣言。`,
+  styleKeywords: ['热点', '爆款', '揭秘', '震惊', '必看', '干货', '福利', '刷屏'],
+  requiredElements: ['吸引眼球的标题', '图片标记', '引导关注'],
   formatRules: {
-    titleStyle: '震惊！揭秘！真相！',
-    paragraphLength: { min: 80, max: 150 },
-    controversialContent: true,
-    discussionPrompt: true,
-    clickbaitLevel: { min: 0.6, max: 0.9 },
+    titleOptimization: true,
     popularLanguage: true,
-    controversialPlacement: 'throughout',
-    titleOptimization: true
+    imageSupport: true,
+    clickbaitLevel: { min: 6, max: 9 },
+    discussionPrompt: true
   },
   metadata: {
     version: '1.0.0',
     author: 'CogniLink Team',
     createdAt: new Date('2025-01-27'),
     updatedAt: new Date('2025-01-27'),
-    description: '头条号热点文章模板，适合争议性话题讨论',
-    tags: ['头条号', '热点', '争议', '大众媒体']
+    description: '头条号热点文章模板，适合大众阅读和快速传播',
+    tags: ['头条号', '热点', '大众阅读', '快速传播']
+  }
+};
+
+// 知乎模板配置
+export const zhihuTemplate: PlatformTemplate = {
+  id: 'zhihu',
+  name: '知乎',
+  maxLength: 5000,
+  systemPrompt: `你是一个专业的知乎答主，擅长提供有深度、有见解的回答。
+
+特点：
+- 逻辑清晰，论证充分
+- 引用数据和案例
+- 专业性强，知识密度高
+- 适合深度思考和讨论
+- 语言严谨，客观中立
+
+风格要求：
+- 开门见山，提出核心观点
+- 分点阐述，条理清晰
+- 使用专业术语，并做适当解释
+- 引用权威来源，增强可信度
+- 结尾总结观点，引发进一步思考`,
+  userTemplate: `针对以下知乎问题撰写一篇专业回答：
+
+问题：{topic}
+背景信息：{context}
+
+要求：
+1. 1000-5000字，内容有深度
+2. 逻辑清晰，论证充分，分点阐述
+3. 引用相关数据、研究或案例支撑观点
+4. 语言专业严谨，客观中立
+5. 结尾总结观点，可以提出开放性问题
+
+请确保回答质量高，能为读者提供有价值的信息。`,
+  styleKeywords: ['谢邀', '利益相关', '先问是不是', '再问为什么', '抛砖引玉', '私以为', '反对', '赞同'],
+  requiredElements: ['清晰论点', '分点阐述', '数据支撑', '专业语言'],
+  formatRules: {
+    professionalTone: true,
+    dataSupport: true,
+    headingHierarchy: true,
+    referenceSection: true,
+    conclusionRequired: true
+  },
+  metadata: {
+    version: '1.0.0',
+    author: 'CogniLink Team',
+    createdAt: new Date('2025-06-02'),
+    updatedAt: new Date('2025-06-02'),
+    description: '知乎专业回答模板，适合深度分析和知识分享',
+    tags: ['知乎', '问答', '专业回答', '知识分享']
+  }
+};
+
+// 抖音模板配置
+export const douyinTemplate: PlatformTemplate = {
+  id: 'douyin',
+  name: '抖音',
+  maxLength: 150, // 通常指视频描述文字长度
+  systemPrompt: `你是一个抖音短视频内容策划，擅长创作爆款视频脚本。
+
+特点：
+- 内容简短精炼，节奏快
+- 视觉冲击力强，开头吸引人
+- 配合热门音乐和挑战
+- 强互动性，引导点赞评论
+- 语言口语化，接地气
+
+风格要求：
+- 开头3秒抓住用户注意力
+- 内容有记忆点，易于传播
+- 配合热门BGM和特效
+- 结尾有明确的互动引导
+- 真实、有趣、有用、有共鸣`,
+  userTemplate: `为以下主题创作一个15-60秒的抖音短视频脚本：
+
+主题：{topic}
+核心内容/亮点：{context}
+
+要求：
+1. 视频时长控制在15-60秒
+2. 脚本包含画面描述和旁白/对话
+3. 开头3秒内必须有爆点或悬念
+4. 内容节奏快，不拖沓
+5. 配合热门音乐或音效（文字说明即可）
+6. 结尾引导用户点赞、评论、关注或参与挑战
+
+请确保脚本创意新颖，具有传播潜力。`,
+  styleKeywords: ['反转', '教程', '测评', '剧情', '挑战', '变装', '卡点', 'vlog'],
+  requiredElements: ['爆点开头', '快速节奏', '热门音乐/音效说明', '互动引导'],
+  formatRules: {
+    characterLimit: 150, // 视频描述文案限制
+    emojiDensity: 'medium',
+    interactionPrompt: true,
+    hashtagUsage: {min: 1, max: 3, preferred: 2}
+  },
+  metadata: {
+    version: '1.0.0',
+    author: 'CogniLink Team',
+    createdAt: new Date('2025-06-02'),
+    updatedAt: new Date('2025-06-02'),
+    description: '抖音短视频脚本模板，适合创作病毒式传播内容',
+    tags: ['抖音', '短视频', '脚本', '病毒营销']
   }
 };
 
@@ -305,7 +402,9 @@ export const platformTemplates: Record<PlatformId, PlatformTemplate> = {
   twitter: twitterTemplate,
   wechat: wechatTemplate,
   blog: blogTemplate,
-  toutiao: toutiaoTemplate
+  toutiao: toutiaoTemplate,
+  zhihu: zhihuTemplate,
+  douyin: douyinTemplate
 };
 
 // 支持的平台列表
@@ -349,6 +448,22 @@ export const supportedPlatforms: SocialMediaPlatform[] = [
     styleKeywords: toutiaoTemplate.styleKeywords,
     requiredElements: toutiaoTemplate.requiredElements,
     formatRules: toutiaoTemplate.formatRules
+  },
+  {
+    id: 'zhihu',
+    name: '知乎',
+    maxLength: 5000,
+    styleKeywords: zhihuTemplate.styleKeywords,
+    requiredElements: zhihuTemplate.requiredElements,
+    formatRules: zhihuTemplate.formatRules
+  },
+  {
+    id: 'douyin',
+    name: '抖音',
+    maxLength: 150,
+    styleKeywords: douyinTemplate.styleKeywords,
+    requiredElements: douyinTemplate.requiredElements,
+    formatRules: douyinTemplate.formatRules
   }
 ];
 

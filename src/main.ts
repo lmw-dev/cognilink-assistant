@@ -19,6 +19,7 @@ import { OriginalityService, OriginalityResult } from './services/OriginalitySer
 import { PlatformTemplateManager } from './services/platform-template-manager';
 import { ContentPostProcessor } from './services/content-post-processor';
 import { PlatformId, TemplateContext } from './types/social-media';
+import { SocialMediaGenerationModal } from './components/SocialMediaGenerationModal';
 
 // Define the chat icon
 const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -193,6 +194,15 @@ export default class CogniLinkPlugin extends Plugin {
         }
       });
 
+      // Command for Social Media Generation Panel
+      this.addCommand({
+        id: 'cognilink-assistant:open-social-media-generator',
+        name: 'CogniLink: 社交媒体内容生成',
+        callback: () => {
+          this.openSocialMediaPanel(); // Opens the modal without pre-filled platform/theme
+        }
+      });
+
       // TOM-107 验收测试命令
       this.addCommand({
         id: 'tom-107-acceptance-test',
@@ -272,7 +282,31 @@ export default class CogniLinkPlugin extends Plugin {
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    await this.settingsManager.saveSettings();
+  }
+
+  // 打开社交媒体内容生成面板
+  async openSocialMediaPanel(platform?: string, theme?: string): Promise<void> {
+    try {
+      console.log('[main] Opening social media panel with:', { platform, theme });
+      
+      // 检查是否有社交媒体生成命令
+      const commandId = 'cognilink-assistant:open-social-media-generator';
+      const command = (this.app as any).commands?.findCommand?.(commandId);
+      
+      if (command) {
+        // 如果有专用命令，执行它
+        (this.app as any).commands?.executeCommandById?.(commandId);
+      } else {
+        // 如果没有专用命令，显示一个模态框来处理社交媒体内容生成
+        const modal = new SocialMediaGenerationModal(this.app, this, platform, theme);
+        modal.open();
+      }
+      
+    } catch (error) {
+      console.error('[main] Failed to open social media panel:', error);
+      new Notice('打开社交媒体生成面板失败');
+    }
   }
 
   // 主题输入弹窗（Modal）入口，集成生成与预览插入主流程

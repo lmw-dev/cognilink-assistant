@@ -324,6 +324,113 @@ const ImprovementSuggestions = memo<ImprovementSuggestionsProps>(({
 
 ImprovementSuggestions.displayName = 'ImprovementSuggestions';
 
+// 紧凑质量概要组件
+const QualityCompactSummary = memo<{
+  result: QualityEvaluationResult;
+  onExpand: () => void;
+}>(({ result, onExpand }) => {
+  // 计算总体评分等级
+  const getScoreGrade = (score: number): { grade: string; className: string; icon: string } => {
+    if (score >= 90) return { grade: '优秀', className: 'excellent', icon: '🌟' };
+    if (score >= 80) return { grade: '良好', className: 'good', icon: '👍' };
+    if (score >= 60) return { grade: '一般', className: 'warning', icon: '⚠️' };
+    return { grade: '待改进', className: 'poor', icon: '❌' };
+  };
+
+  const overallGrade = getScoreGrade(result.overall.total);
+
+  // 获取最重要的建议
+  const getTopSuggestions = () => {
+    if (!result.report?.improvements?.priority || result.report.improvements.priority.length === 0) return [];
+    return result.report.improvements.priority
+      .slice(0, 2)
+      .map(s => s.title);
+  };
+
+  const topSuggestions = getTopSuggestions();
+
+  return (
+    <div className="quality-compact-container">
+      {/* 快速评分显示 */}
+      <div className="quality-quick-score">
+        <div className={`quality-score-circle ${overallGrade.className}`}>
+          {result.overall.total}
+        </div>
+        <div className="quality-score-info">
+          <div className="quality-score-label">
+            {overallGrade.icon} 总体质量：{overallGrade.grade}
+          </div>
+          <div className="quality-score-details">
+            处理时间 {result.processingTime}ms • 置信度 {Math.round(result.confidence * 100)}%
+          </div>
+        </div>
+      </div>
+
+      {/* 关键指标摘要 */}
+      <div className="quality-summary-compact">
+        <div className="quality-summary-row">
+          <div className="quality-metric">
+            <span className="quality-metric-icon">🔍</span>
+            <span className="quality-metric-label">原创性</span>
+            <span className={`quality-metric-value ${result.originality?.isOriginal ? 'excellent' : 'warning'}`}>
+              {result.originality?.isOriginal ? '✓ 原创' : '⚠ 需检查'}
+            </span>
+          </div>
+          <div className="quality-metric">
+            <span className="quality-metric-icon">📋</span>
+            <span className="quality-metric-label">平台适配</span>
+            <span className={`quality-metric-value ${(result.platformCompliance?.overallScore ?? 0) >= 80 ? 'excellent' : (result.platformCompliance?.overallScore ?? 0) >= 60 ? 'good' : 'warning'}`}>
+              {result.platformCompliance?.overallScore ?? 0}分
+            </span>
+          </div>
+        </div>
+        
+        <div className="quality-summary-row">
+          <div className="quality-metric">
+            <span className="quality-metric-icon">📖</span>
+            <span className="quality-metric-label">可读性</span>
+            <span className={`quality-metric-value ${result.overall.dimensions.readability >= 80 ? 'excellent' : result.overall.dimensions.readability >= 60 ? 'good' : 'warning'}`}>
+              {result.overall.dimensions.readability}分
+            </span>
+          </div>
+          <div className="quality-metric">
+            <span className="quality-metric-icon">✨</span>
+            <span className="quality-metric-label">吸引力</span>
+            <span className={`quality-metric-value ${result.overall.dimensions.attractiveness >= 80 ? 'excellent' : result.overall.dimensions.attractiveness >= 60 ? 'good' : 'warning'}`}>
+              {result.overall.dimensions.attractiveness}分
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 快速操作建议 */}
+      {topSuggestions.length > 0 && (
+        <div className="quality-quick-actions">
+          {topSuggestions.map((suggestion, index) => (
+            <span key={index} className="quality-quick-action priority-high">
+              {suggestion}
+            </span>
+          ))}
+          {result.report?.improvements?.priority && result.report.improvements.priority.length > 2 && (
+            <span className="quality-quick-action">
+              +{result.report.improvements.priority.length - 2} 更多建议
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* 展开按钮 */}
+      <button className="quality-toggle-btn" onClick={onExpand}>
+        <span className="toggle-icon">🔍</span>
+        <span className="toggle-text">查看详细报告</span>
+        <span className="toggle-icon">▼</span>
+      </button>
+    </div>
+  );
+});
+
+QualityCompactSummary.displayName = 'QualityCompactSummary';
+
 // 主组件
 export const QualityDisplayComponent: React.FC<QualityDisplayProps> = ({
   evaluationResult,
@@ -337,6 +444,8 @@ export const QualityDisplayComponent: React.FC<QualityDisplayProps> = ({
   compact = false
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'originality' | 'compliance' | 'suggestions'>('overview');
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   
   // 获取质量等级的颜色
@@ -384,210 +493,177 @@ export const QualityDisplayComponent: React.FC<QualityDisplayProps> = ({
     }
   }, [onRefresh]);
   
+  // 处理展开/折叠
+  const handleToggleExpand = useCallback(async () => {
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
+    setIsExpanded(!isExpanded);
+    
+    // 动画完成后重置状态
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 300);
+  }, [isExpanded, isAnimating]);
+  
+  const containerClassName = [
+    'quality-display-component',
+    isExpanded ? 'expanded-mode' : 'compact-mode',
+    isAnimating ? (isExpanded ? 'expanding' : 'collapsing') : '',
+    className
+  ].filter(Boolean).join(' ');
+
   return (
-    <div className={`quality-display-component ${className || ''} ${compact ? 'compact' : ''}`}>
-      {/* 头部控制区 */}
-      <div className="quality-header">
-        <div className="header-title">
-          <h3>质量评估报告</h3>
-          <div className="processing-info">
-            <span className="processing-time">
-              处理时间: {evaluationResult.processingTime}ms
-            </span>
-            <span className="confidence">
-              置信度: {Math.round(evaluationResult.confidence * 100)}%
-            </span>
-          </div>
-        </div>
-        
-        <div className="header-controls">
-          {onRefresh && (
-            <button className="refresh-btn" onClick={handleRefresh}>
-              刷新
-            </button>
-          )}
-          {onExportReport && (
-            <div className="export-controls">
+    <div className={containerClassName}>
+      {/* 紧凑模式显示 */}
+      {!isExpanded && (
+        <QualityCompactSummary 
+          result={evaluationResult} 
+          onExpand={handleToggleExpand}
+        />
+      )}
+
+      {/* 完整报告模式显示 */}
+      {isExpanded && (
+        <>
+          {/* 头部控制区域 */}
+          <div className="quality-header">
+            <div className="header-title">
+              <h3>📊 质量评估报告</h3>
+            </div>
+            <div className="processing-info">
+              <span>处理时间: {evaluationResult.processingTime}ms</span>
+              <span>置信度: {Math.round(evaluationResult.confidence * 100)}%</span>
+            </div>
+            <div className="header-controls">
               <button 
-                className="export-btn"
-                onClick={() => handleExportReport('markdown')}
-                disabled={isExporting}
+                className="quality-toggle-btn expanded" 
+                onClick={handleToggleExpand}
               >
-                {isExporting ? '导出中...' : '导出报告'}
+                <span className="toggle-icon">▲</span>
+                <span className="toggle-text">收起报告</span>
               </button>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* 综合评分展示 */}
-      <div className="overall-score-section">
-        <div className="score-overview">
-          <ScoreVisualization
-            score={evaluationResult.overall.total}
-            maxScore={100}
-            label="综合评分"
-            size="large"
-            showAnimation={true}
-          />
-          
-          <div className="grade-info">
-            <div 
-              className="grade-badge"
-              style={{ backgroundColor: getGradeColor(evaluationResult.overall.grade) }}
-            >
-              {getGradeLabel(evaluationResult.overall.grade)}
-            </div>
-            <div className="recommendation">
-              {evaluationResult.overall.recommendation}
+              {onExportReport && (
+                <button onClick={() => handleExportReport('markdown')}>
+                  导出报告
+                </button>
+              )}
             </div>
           </div>
-        </div>
-        
-        {/* 各维度评分 */}
-        <div className="dimension-scores">
-          <ScoreVisualization
-            score={evaluationResult.overall.dimensions.originality}
-            maxScore={100}
-            label="原创性"
-            size="medium"
-          />
-          <ScoreVisualization
-            score={evaluationResult.overall.dimensions.compliance}
-            maxScore={100}
-            label="平台适配度"
-            size="medium"
-          />
-          <ScoreVisualization
-            score={evaluationResult.overall.dimensions.readability}
-            maxScore={100}
-            label="可读性"
-            size="medium"
-          />
-          <ScoreVisualization
-            score={evaluationResult.overall.dimensions.attractiveness}
-            maxScore={100}
-            label="吸引力"
-            size="medium"
-          />
-        </div>
-      </div>
-      
-      {/* 标签页导航 */}
-      <div className="tab-navigation">
-        <button 
-          className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          概览
-        </button>
-        {evaluationResult.originality && (
-          <button 
-            className={`tab-btn ${activeTab === 'originality' ? 'active' : ''}`}
-            onClick={() => setActiveTab('originality')}
-          >
-            原创性检测
-          </button>
-        )}
-        {evaluationResult.platformCompliance && (
-          <button 
-            className={`tab-btn ${activeTab === 'compliance' ? 'active' : ''}`}
-            onClick={() => setActiveTab('compliance')}
-          >
-            平台适配度
-          </button>
-        )}
-        <button 
-          className={`tab-btn ${activeTab === 'suggestions' ? 'active' : ''}`}
-          onClick={() => setActiveTab('suggestions')}
-        >
-          改进建议
-        </button>
-      </div>
-      
-      {/* 标签页内容 */}
-      <div className="tab-content">
-        {activeTab === 'overview' && (
-          <div className="overview-content">
-            <div className="report-summary">
-              <h4>报告摘要</h4>
-              <div className="summary-grid">
-                <div className="summary-item">
-                  <span className="summary-label">总体评分</span>
-                  <span className="summary-value">{evaluationResult.report.summary.overallScore}/100</span>
-                </div>
-                <div className="summary-item">
-                  <span className="summary-label">风险等级</span>
-                  <span className={`summary-value risk-${evaluationResult.report.summary.riskLevel}`}>
-                    {evaluationResult.report.summary.riskLevel === 'low' ? '低' : 
-                     evaluationResult.report.summary.riskLevel === 'medium' ? '中' : '高'}
-                  </span>
-                </div>
-                <div className="summary-item">
-                  <span className="summary-label">处理时间</span>
-                  <span className="summary-value">{evaluationResult.report.summary.processingTime}ms</span>
+
+          {/* 标签页导航 */}
+          <div className="tab-navigation">
+            <button 
+              className={`tab-btn overview ${activeTab === 'overview' ? 'active' : ''}`}
+              onClick={() => setActiveTab('overview')}
+            >
+              概览
+            </button>
+            <button 
+              className={`tab-btn originality ${activeTab === 'originality' ? 'active' : ''}`}
+              onClick={() => setActiveTab('originality')}
+            >
+              原创性
+            </button>
+            <button 
+              className={`tab-btn compliance ${activeTab === 'compliance' ? 'active' : ''}`}
+              onClick={() => setActiveTab('compliance')}
+            >
+              平台适配
+            </button>
+            <button 
+              className={`tab-btn suggestions ${activeTab === 'suggestions' ? 'active' : ''}`}
+              onClick={() => setActiveTab('suggestions')}
+            >
+              改进建议
+            </button>
+          </div>
+
+          {/* 标签页内容 */}
+          <div className="tab-content">
+            {activeTab === 'overview' && (
+              <div className="overview-content">
+                <div className="report-summary">
+                  <h4>报告摘要</h4>
+                  <div className="summary-grid">
+                    <div className="summary-item">
+                      <span className="summary-label">总体评分</span>
+                      <span className="summary-value">{evaluationResult.report.summary.overallScore}/100</span>
+                    </div>
+                    <div className="summary-item">
+                      <span className="summary-label">风险等级</span>
+                      <span className={`summary-value risk-${evaluationResult.report.summary.riskLevel}`}>
+                        {evaluationResult.report.summary.riskLevel === 'low' ? '低' : 
+                         evaluationResult.report.summary.riskLevel === 'medium' ? '中' : '高'}
+                      </span>
+                    </div>
+                    <div className="summary-item">
+                      <span className="summary-label">处理时间</span>
+                      <span className="summary-value">{evaluationResult.report.summary.processingTime}ms</span>
+                    </div>
+                  </div>
+                  
+                  {evaluationResult.report.summary.keyStrengths.length > 0 && (
+                    <div className="key-points">
+                      <h5>主要优势</h5>
+                      <ul>
+                        {evaluationResult.report.summary.keyStrengths.map((strength, index) => (
+                          <li key={index} className="strength-item">{strength}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {evaluationResult.report.summary.keyWeaknesses.length > 0 && (
+                    <div className="key-points">
+                      <h5>主要问题</h5>
+                      <ul>
+                        {evaluationResult.report.summary.keyWeaknesses.map((weakness, index) => (
+                          <li key={index} className="weakness-item">{weakness}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              {evaluationResult.report.summary.keyStrengths.length > 0 && (
-                <div className="key-points">
-                  <h5>主要优势</h5>
-                  <ul>
-                    {evaluationResult.report.summary.keyStrengths.map((strength, index) => (
-                      <li key={index} className="strength-item">{strength}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              
-              {evaluationResult.report.summary.keyWeaknesses.length > 0 && (
-                <div className="key-points">
-                  <h5>主要问题</h5>
-                  <ul>
-                    {evaluationResult.report.summary.keyWeaknesses.map((weakness, index) => (
-                      <li key={index} className="weakness-item">{weakness}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        
-        {activeTab === 'originality' && evaluationResult.originality && (
-          <OriginalityResult
-            isOriginal={evaluationResult.originality.isOriginal}
-            score={evaluationResult.originality.overallScore}
-            duplicateSegments={evaluationResult.originality.duplicateSegments}
-            similarSources={evaluationResult.originality.mostSimilarSource ? [evaluationResult.originality.mostSimilarSource] : []}
-            onShowDetails={() => {}}
-          />
-        )}
-        
-        {activeTab === 'compliance' && evaluationResult.platformCompliance && (
-          <ComplianceResult
-            complianceResult={evaluationResult.platformCompliance}
-            platform={{
-              id: evaluationResult.metadata.platform,
-              name: evaluationResult.metadata.platform,
-              maxLength: 1000,
-              styleKeywords: [],
-              requiredElements: [],
-              formatRules: {}
-            }}
-            onShowDetails={() => {}}
-          />
-        )}
-        
-        {activeTab === 'suggestions' && (
-          <ImprovementSuggestions
-            suggestions={evaluationResult.report.improvements.priority.concat(
-              evaluationResult.report.improvements.optional
             )}
-            onApplySuggestion={onApplySuggestion}
-          />
-        )}
-      </div>
+            
+            {activeTab === 'originality' && evaluationResult.originality && (
+              <OriginalityResult
+                isOriginal={evaluationResult.originality.isOriginal}
+                score={evaluationResult.originality.overallScore}
+                duplicateSegments={evaluationResult.originality.duplicateSegments}
+                similarSources={evaluationResult.originality.mostSimilarSource ? [evaluationResult.originality.mostSimilarSource] : []}
+                onShowDetails={() => {}}
+              />
+            )}
+            
+            {activeTab === 'compliance' && evaluationResult.platformCompliance && (
+              <ComplianceResult
+                complianceResult={evaluationResult.platformCompliance}
+                platform={{
+                  id: evaluationResult.metadata.platform,
+                  name: evaluationResult.metadata.platform,
+                  maxLength: 1000,
+                  styleKeywords: [],
+                  requiredElements: [],
+                  formatRules: {}
+                }}
+                onShowDetails={() => {}}
+              />
+            )}
+            
+            {activeTab === 'suggestions' && (
+              <ImprovementSuggestions
+                suggestions={evaluationResult.report.improvements.priority.concat(
+                  evaluationResult.report.improvements.optional
+                )}
+                onApplySuggestion={onApplySuggestion}
+              />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }; 
