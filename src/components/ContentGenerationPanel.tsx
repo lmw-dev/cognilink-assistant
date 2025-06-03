@@ -823,6 +823,40 @@ export const ContentGenerationPanel: React.FC<ContentGenerationPanelProps> = ({
                   ))}
                 </div>
               )}
+              {/* Suggested Keywords Section */}
+              {availableKeywords && availableKeywords.length > 0 && (
+                <div className="suggested-keywords-section" style={{ marginTop: '10px' }}>
+                  <div className="setting-item-name" style={{ marginBottom: '5px' }}>
+                    <span className="setting-icon">💡</span>
+                    建议关键词：
+                  </div>
+                  <div className="suggested-keyword-tags">
+                    {availableKeywords.map((keyword, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        className="suggested-keyword-tag"
+                        onClick={() => {
+                          if (!formState.keywords.includes(keyword)) {
+                            handleFieldChange('keywords', [...formState.keywords, keyword]);
+                          }
+                        }}
+                        style={{ 
+                          marginRight: '5px', 
+                          marginBottom: '5px', 
+                          padding: '3px 8px',
+                          border: '1px solid var(--text-faint)',
+                          borderRadius: '4px',
+                          background: 'var(--background-secondary)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {keyword}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 生成控制 */}

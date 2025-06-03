@@ -122,7 +122,7 @@ const ContentPreviewWithReferences = memo<ContentPreviewWithReferencesProps>(({ 
   // Render Markdown content
   useEffect(() => {
     if (contentRef.current && plugin && plugin.app) {
-      contentRef.current.empty();
+      contentRef.current.innerHTML = '';
       MarkdownRenderer.render(plugin.app, content, contentRef.current, '', plugin);
     }
   }, [content, plugin]);
@@ -332,10 +332,17 @@ export const SocialMediaContentUI: React.FC<SocialMediaContentUIProps> = ({
       };
       
       const content = await onGenerateContent(selectedPlatform, formState.theme, options);
-      const generationTime = Date.now() - startTime;
+      const ownCalculatedGenerationTime = Date.now() - startTime;
       
       setGeneratedContent(content);
-      setPerformanceMetrics(prev => ({ ...prev, generationTime }));
+
+      // Use metadata's generationTime if available and valid, otherwise use own calculation for display
+      const displayGenerationTime =
+        content.metadata && typeof content.metadata.generationTime === 'number' && content.metadata.generationTime > 0
+        ? content.metadata.generationTime
+        : ownCalculatedGenerationTime;
+      
+      setPerformanceMetrics(prev => ({ ...prev, generationTime: displayGenerationTime }));
       
       setWorkflowState('evaluating');
       const evaluationStartTime = Date.now();
@@ -590,6 +597,10 @@ ${references.map(ref => `- ${ref.replace(/^[参考资料来源引用：:]+\s*/, 
                 <span className="sm-platform-badge">{generatedContent.platform.name}</span>
                 <span>{generatedContent.content.length} 字符</span>
                 {generatedContent.qualityScore && <span>质量: {generatedContent.qualityScore}/100</span>}
+                {/* Added performance metric display for development mode */}
+                {process.env.NODE_ENV === 'development' && performanceMetrics.generationTime > 0 && (
+                  <span className="sm-dev-metric">生成耗时：{(performanceMetrics.generationTime / 1000).toFixed(2)}s</span>
+                )}
               </div>
             </div>
             <ContentPreviewWithReferences content={generatedContent.content} plugin={plugin} />

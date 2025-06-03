@@ -21,6 +21,19 @@ import { ContentPostProcessor } from './services/content-post-processor';
 import { PlatformId, TemplateContext } from './types/social-media';
 import { SocialMediaGenerationModal } from './components/SocialMediaGenerationModal';
 
+// Import new services and view for Smart Assistant
+import { SmartAssistantView, SMART_ASSISTANT_VIEW_TYPE } from './views/SmartAssistantView';
+import { EnhancedPromptTemplateService } from './services/prompt/EnhancedPromptTemplateService';
+import { ContentQualityEvaluator } from './services/content-quality-evaluator';
+import { PlatformContentAnalyzer } from './services/prompt/PlatformContentAnalyzer';
+import { PromptModuleService } from './services/prompt/PromptModuleService';
+
+// Import dependencies for ContentQualityEvaluator
+import { OriginalityDetector } from './services/originality-detector';
+import { PlatformComplianceEvaluator } from './services/platform-compliance-evaluator';
+import { QualityScorer } from './services/quality-scorer';
+import { QualityReportGenerator } from './services/quality-report-generator';
+
 // Define the chat icon
 const CHAT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -39,35 +52,95 @@ export default class CogniLinkPlugin extends Plugin {
   ragService: RAGService;
   contentPostProcessor: ContentPostProcessor;
 
+  // New services for Smart Assistant Panel
+  settingsStorage: SettingsStorage;
+  enhancedPromptTemplateService: EnhancedPromptTemplateService;
+  originalityDetector: OriginalityDetector;
+  platformComplianceEvaluator: PlatformComplianceEvaluator;
+  qualityScorer: QualityScorer;
+  reportGenerator: QualityReportGenerator;
+  contentQualityEvaluator: ContentQualityEvaluator;
+  platformAnalyzer: PlatformContentAnalyzer;
+  promptModuleService: PromptModuleService;
+
   async onload() {
     try {
       console.log('[main] onload called');
       // 初始化 SettingsStorage
-      const storage = new SettingsStorage(this);
-      console.log('[main] SettingsStorage created:', storage);
+      this.settingsStorage = new SettingsStorage(this);
+      console.log('[main] SettingsStorage created:', this.settingsStorage);
+      
       // 初始化 SettingsManager
-      this.settingsManager = new SettingsManager(this.app, this, storage);
+      this.settingsManager = new SettingsManager(this.app, this, this.settingsStorage);
       console.log('[main] SettingsManager created:', this.settingsManager);
+      
       // 加载设置
       await this.settingsManager.loadSettings();
       this.settings = this.settingsManager.getSettings();
       console.log('[main] settings loaded:', this.settings);
-      // 初始化服务
+      
+      // 初始化核心服务
       console.log('[main] initializing EmbeddingService');
       this.embeddingService = new EmbeddingService(this);
       console.log('[main] EmbeddingService initialized');
+      
       console.log('[main] initializing AIService');
       this.aiService = new AIService(this);
       console.log('[main] AIService initialized');
+      
       console.log('[main] initializing ChatManager');
       this.chatManager = new ChatManager(this);
       console.log('[main] ChatManager initialized');
+      
       console.log('[main] initializing KeyboardManager');
       this.keyboardManager = new KeyboardManager(this.app, this);
       console.log('[main] KeyboardManager initialized');
+      
       console.log('[main] initializing AccessibilityManager');
       this.accessibilityManager = new AccessibilityManager(this.app, this);
       console.log('[main] AccessibilityManager initialized');
+
+      // 初始化 Smart Assistant 相关服务
+      console.log('[main] initializing OriginalityDetector');
+      this.originalityDetector = new OriginalityDetector(this.embeddingService);
+      console.log('[main] OriginalityDetector initialized');
+
+      console.log('[main] initializing PlatformComplianceEvaluator');
+      this.platformComplianceEvaluator = new PlatformComplianceEvaluator();
+      console.log('[main] PlatformComplianceEvaluator initialized');
+
+      console.log('[main] initializing QualityScorer');
+      this.qualityScorer = new QualityScorer();
+      console.log('[main] QualityScorer initialized');
+
+      console.log('[main] initializing QualityReportGenerator');
+      this.reportGenerator = new QualityReportGenerator();
+      console.log('[main] QualityReportGenerator initialized');
+      
+      console.log('[main] initializing ContentQualityEvaluator');
+      this.contentQualityEvaluator = new ContentQualityEvaluator(
+        this.originalityDetector,
+        this.platformComplianceEvaluator,
+        this.qualityScorer,
+        this.reportGenerator,
+        this.aiService
+      );
+      console.log('[main] ContentQualityEvaluator initialized');
+
+      console.log('[main] initializing EnhancedPromptTemplateService');
+      this.enhancedPromptTemplateService = new EnhancedPromptTemplateService(this.settingsManager, this.settingsStorage);
+      console.log('[main] EnhancedPromptTemplateService initialized');
+
+      console.log('[main] initializing PlatformContentAnalyzer');
+      this.platformAnalyzer = new PlatformContentAnalyzer(this.aiService, this.enhancedPromptTemplateService, this.contentQualityEvaluator);
+      console.log('[main] PlatformContentAnalyzer initialized');
+
+      console.log('[main] initializing PromptModuleService');
+      this.promptModuleService = new PromptModuleService(this.settingsManager, this.settingsStorage, this.contentQualityEvaluator, {
+          enableAutoBackup: this.settings.promptModule?.autoBackup ?? true,
+          enablePerformanceMonitoring: this.settings.promptModule?.enablePerformanceTracking ?? true,
+      });
+      console.log('[main] PromptModuleService initialized');
       
       // 设置文件变化监听
       this.setupFileWatcher();
@@ -81,10 +154,27 @@ export default class CogniLinkPlugin extends Plugin {
           return new ChatView(leaf, this);
         }
       );
+
+      // Register Smart Assistant View
+      this.registerView(
+        SMART_ASSISTANT_VIEW_TYPE,
+        (leaf: WorkspaceLeaf) => new SmartAssistantView(leaf, this)
+      );
+
       this.addRibbonIcon('cognilink-chat', 'CogniLink Assistant', async () => {
         console.log('Ribbon icon clicked');
         await this.activateView();
       });
+
+      // Command to open Smart Assistant Panel
+      this.addCommand({
+        id: 'open-smart-assistant',
+        name: 'Open Smart Assistant Panel',
+        callback: () => {
+          this.activateSmartAssistantView();
+        }
+      });
+      
       this.addCommand({
         id: 'toggle-cognilink-chat',
         name: 'Toggle CogniLink Chat',
@@ -174,7 +264,6 @@ export default class CogniLinkPlugin extends Plugin {
 
       this.ragService = new RAGService(this.embeddingService, this.aiService);
       
-      // 初始化内容后处理器
       console.log('[main] initializing ContentPostProcessor');
       this.contentPostProcessor = new ContentPostProcessor();
       console.log('[main] ContentPostProcessor initialized');
@@ -235,6 +324,8 @@ export default class CogniLinkPlugin extends Plugin {
     if (this.accessibilityManager) {
       this.accessibilityManager.cleanup();
     }
+    // Detach Smart Assistant view if open
+    this.app.workspace.detachLeavesOfType(SMART_ASSISTANT_VIEW_TYPE);
     new Notice('CogniLink 插件已卸载');
   }
 
@@ -248,15 +339,28 @@ export default class CogniLinkPlugin extends Plugin {
       if (newLeaf) {
         await newLeaf.setViewState({ type: VIEW_TYPE_CHAT });
         leaf = newLeaf;
+      } else {
+        console.error("Failed to get a right leaf for ChatView");
+        return;
       }
     }
-    
-    if (leaf) {
-      workspace.revealLeaf(leaf);
+    workspace.revealLeaf(leaf);
+  }
+
+  // Helper to activate Smart Assistant View
+  async activateSmartAssistantView() {
+    this.app.workspace.detachLeavesOfType(SMART_ASSISTANT_VIEW_TYPE); // Close existing instances
+    const rightLeaf = this.app.workspace.getRightLeaf(false);
+    if (rightLeaf) {
+      await rightLeaf.setViewState({
+        type: SMART_ASSISTANT_VIEW_TYPE,
+        active: true,
+      } as ViewState); // Added ViewState cast
+      this.app.workspace.revealLeaf(rightLeaf);
+    } else {
+      console.error("Failed to get a right leaf for SmartAssistantView");
+      new Notice("Failed to open Smart Assistant Panel: No available leaf.");
     }
-    
-    // 更新可访问性状态
-    this.accessibilityManager.updateAccessibility();
   }
 
   async initLeaf() {

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ContentGenerationPanel, ContentGenerationPanelProps, GenerationRequest } from '../ContentGenerationPanel';
 import { SocialMediaPlatform } from '../../types/social-media';
@@ -68,23 +68,44 @@ describe('ContentGenerationPanel', () => {
   it('displays platform options correctly', () => {
     render(<ContentGenerationPanel {...defaultProps} />);
     
-    // Check if platform cards are present instead of select options
-    expect(screen.getByText('小红书')).toBeInTheDocument();
-    expect(screen.getByText('Twitter')).toBeInTheDocument();
-    expect(screen.getByText('最大 1000 字符')).toBeInTheDocument();
-    expect(screen.getByText('最大 280 字符')).toBeInTheDocument();
+    const platformSelect = screen.getAllByRole('combobox')[0];
+
+    // Find the option for Xiaohongshu by its value
+    const xiaohongshuOption = within(platformSelect).getByRole('option', { name: /小红书/ }) as HTMLOptionElement;
+    expect(xiaohongshuOption).toBeInTheDocument();
+    expect(xiaohongshuOption.value).toBe('xiaohongshu');
+    expect(xiaohongshuOption.textContent).toMatch(/小红书 \(最大 1000 字符\)/);
+
+    // Find the option for Twitter by its value
+    const twitterOption = within(platformSelect).getByRole('option', { name: /Twitter/ }) as HTMLOptionElement;
+    expect(twitterOption).toBeInTheDocument();
+    expect(twitterOption.value).toBe('twitter');
+    expect(twitterOption.textContent).toMatch(/Twitter \(最大 280 字符\)/);
   });
 
   it('shows platform info when platform is selected', async () => {
     render(<ContentGenerationPanel {...defaultProps} />);
     
     // Click on platform card instead of changing select
-    const platformCard = screen.getByText('小红书').closest('.platform-card');
-    fireEvent.click(platformCard!);
+    // const platformCard = screen.getByText('小红书').closest('.platform-card');
+    // fireEvent.click(platformCard!);
+    const platformSelect = screen.getAllByRole('combobox')[0];
+    fireEvent.change(platformSelect, { target: { value: 'xiaohongshu' } });
     
     await waitFor(() => {
+      // Ensure the compact features are visible first (as they appear before tooltip is opened)
+      expect(screen.getByText('emoji')).toBeInTheDocument(); 
+      expect(screen.getByText('hashtag')).toBeInTheDocument();
+      expect(screen.getByText('interaction')).toBeInTheDocument();
+    });
+
+    // Click the info button to show the detailed tooltip
+    const infoButton = screen.getByTitle('查看平台详细信息');
+    fireEvent.click(infoButton);
+
+    await waitFor(() => {
       expect(screen.getByText('emoji • hashtag • interaction')).toBeInTheDocument();
-      expect(screen.getByText('生活 • 分享 • 种草')).toBeInTheDocument();
+      expect(screen.getByText('生活 • 分享 • 种草')).toBeInTheDocument(); // styleKeywords
     });
   });
 
@@ -105,8 +126,10 @@ describe('ContentGenerationPanel', () => {
     render(<ContentGenerationPanel {...defaultProps} onGenerate={mockOnGenerate} />);
     
     // Fill in form
-    const platformCard = screen.getByText('小红书').closest('.platform-card');
-    fireEvent.click(platformCard!);
+    // const platformCard = screen.getByText('小红书').closest('.platform-card');
+    // fireEvent.click(platformCard!);
+    const platformSelect = screen.getAllByRole('combobox')[0];
+    fireEvent.change(platformSelect, { target: { value: 'xiaohongshu' } });
     
     const themeTextarea = screen.getByPlaceholderText(/例如：/);
     fireEvent.change(themeTextarea, { target: { value: '人工智能在教育领域的应用' } });
@@ -122,18 +145,20 @@ describe('ContentGenerationPanel', () => {
     render(<ContentGenerationPanel {...defaultProps} onGenerate={mockOnGenerate} />);
     
     // Fill in form
-    const platformCard = screen.getByText('小红书').closest('.platform-card');
-    fireEvent.click(platformCard!);
+    // const platformCard = screen.getByText('小红书').closest('.platform-card');
+    // fireEvent.click(platformCard!);
+    const platformSelect = screen.getAllByRole('combobox')[0];
+    fireEvent.change(platformSelect, { target: { value: 'xiaohongshu' } });
     
     const themeTextarea = screen.getByPlaceholderText(/例如：/);
     fireEvent.change(themeTextarea, { target: { value: '人工智能在教育领域的应用' } });
     
     // Get select elements by their container
     const selects = screen.getAllByRole('combobox');
-    const lengthSelect = selects[0]; // First select is length
+    const lengthSelect = selects[1]; // First select is length
     fireEvent.change(lengthSelect, { target: { value: 'long' } });
     
-    const styleSelect = selects[1]; // Second select is style
+    const styleSelect = selects[2]; // Second select is style
     fireEvent.change(styleSelect, { target: { value: 'casual' } });
     
     // Submit form
@@ -263,8 +288,8 @@ describe('ContentGenerationPanel', () => {
     );
     
     // Fill required fields
-    const platformCard = screen.getByText('小红书').closest('.platform-card');
-    fireEvent.click(platformCard!);
+    const platformSelect = screen.getAllByRole('combobox')[0]; // Get the first combobox (platform selector)
+    fireEvent.change(platformSelect, { target: { value: 'xiaohongshu' } }); // Select by value
     
     const themeTextarea = screen.getByPlaceholderText(/例如：/);
     fireEvent.change(themeTextarea, { target: { value: '测试主题内容，这是一个足够长的主题描述' } });
@@ -345,8 +370,8 @@ describe('ContentGenerationPanel', () => {
     
     // Check select values
     const selects = screen.getAllByRole('combobox');
-    const lengthSelect = selects[0] as HTMLSelectElement;
-    const styleSelect = selects[1] as HTMLSelectElement;
+    const lengthSelect = selects[1] as HTMLSelectElement;
+    const styleSelect = selects[2] as HTMLSelectElement;
     
     expect(lengthSelect.value).toBe('long');
     expect(styleSelect.value).toBe('casual');
