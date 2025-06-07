@@ -424,139 +424,50 @@ export class SettingsTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    // === RAG 索引范围配置（白名单/黑名单文件夹） ===
+    // === RAG 索引范围配置 ===
     containerEl.createEl('h3', { text: 'RAG 索引范围配置' });
-    const allFiles = this.app.vault.getAllLoadedFiles();
-    const allFolders = Array.from(new Set(
-      allFiles
-        .map(f => f.path)
-        .filter(p => p.includes('/'))
-        .map(p => p.substring(0, p.lastIndexOf('/') + 1))
-    ));
-    // 工具函数：渲染多选输入
-    function renderMultiSelect(
-      label: string,
-      selected: string[],
-      onChange: (val: string[]) => void,
-      placeholder: string
-    ) {
-      const setting = new Setting(containerEl)
-        .setName(label)
-        .setDesc(placeholder);
-      const input = setting.controlEl.createEl('input', {
-        type: 'text',
-        placeholder: '输入或选择文件夹路径，回车添加',
-        cls: 'rag-folder-input',
-      });
-      input.style.minWidth = '260px';
-      // 补全建议下拉
-      const suggestBox = setting.controlEl.createEl('div', { cls: 'rag-suggest-box' });
-      suggestBox.style.position = 'absolute';
-      suggestBox.style.background = '#fff';
-      suggestBox.style.border = '1px solid #ccc';
-      suggestBox.style.zIndex = '1000';
-      suggestBox.style.display = 'none';
-      suggestBox.style.maxHeight = '120px';
-      suggestBox.style.overflowY = 'auto';
-      // 已选标签
-      const tagBox = setting.controlEl.createEl('div', { cls: 'rag-tag-box' });
-      tagBox.style.display = 'flex';
-      tagBox.style.flexWrap = 'wrap';
-      tagBox.style.gap = '4px';
-      tagBox.style.margin = '4px 0';
-      function renderTags() {
-        tagBox.empty();
-        selected.forEach((val, idx) => {
-          const tag = tagBox.createEl('span', { text: val, cls: 'rag-tag' });
-          tag.style.background = '#e0e7ef';
-          tag.style.borderRadius = '4px';
-          tag.style.padding = '2px 8px';
-          tag.style.fontSize = '0.95em';
-          tag.style.display = 'inline-flex';
-          tag.style.alignItems = 'center';
-          tag.style.gap = '4px';
-          const del = tag.createEl('span', { text: '×', cls: 'rag-tag-del' });
-          del.style.cursor = 'pointer';
-          del.onclick = () => {
-            const newArr = selected.slice();
-            newArr.splice(idx, 1);
-            onChange(newArr);
-            renderTags();
-          };
-        });
-      }
-      renderTags();
-      // 输入事件
-      input.oninput = () => {
-        const val = input.value.trim();
-        if (!val) {
-          suggestBox.style.display = 'none';
-          suggestBox.empty();
-          return;
-        }
-        const suggestions = allFolders.filter(f => f.startsWith(val) && !selected.includes(f));
-        suggestBox.empty();
-        if (suggestions.length > 0) {
-          suggestions.forEach(s => {
-            const item = suggestBox.createEl('div', { text: s, cls: 'rag-suggest-item' });
-            item.style.padding = '4px 8px';
-            item.style.cursor = 'pointer';
-            item.onmousedown = () => {
-              onChange([...selected, s]);
-              input.value = '';
-              suggestBox.style.display = 'none';
-              renderTags();
-            };
+    new Setting(containerEl)
+      .setName('白名单文件夹')
+      .setDesc('仅索引这些文件夹下的内容（留空则不限）')
+      .addTextArea(text => {
+        text
+          .setValue((this.settings.rag?.indexWhitelist || []).join('\n'))
+          .onChange(async (value) => {
+            if (!this.settings.rag) this.settings.rag = {};
+            this.settings.rag.indexWhitelist = value.split('\n').map(s => s.trim()).filter(Boolean);
+            await this.plugin.saveSettings();
+            new Notice('RAG 白名单已保存并生效');
+            console.log('[RAG] 当前白名单:', this.settings.rag.indexWhitelist);
           });
-          suggestBox.style.display = 'block';
-        } else {
-          suggestBox.style.display = 'none';
-        }
-      };
-      // 回车添加
-      input.onkeydown = (e) => {
-        if (e.key === 'Enter') {
-          const val = input.value.trim();
-          if (val && !selected.includes(val)) {
-            onChange([...selected, val]);
-            input.value = '';
-            renderTags();
-          }
-          suggestBox.style.display = 'none';
-        }
-      };
-      // 失焦隐藏建议
-      input.onblur = () => {
-        setTimeout(() => { suggestBox.style.display = 'none'; }, 150);
-      };
-      // 初始渲染
-      renderTags();
-      setting.controlEl.appendChild(tagBox);
-      setting.controlEl.appendChild(suggestBox);
-      return setting;
-    }
-    // 白名单
-    renderMultiSelect(
-      '白名单文件夹',
-      this.settings.rag?.indexWhitelist || [],
-      async (val) => {
-        if (!this.settings.rag) this.settings.rag = {};
-        this.settings.rag.indexWhitelist = val;
-        await this.plugin.saveSettings();
-      },
-      '仅索引这些文件夹下的内容（留空则不限）'
-    );
-    // 黑名单
-    renderMultiSelect(
-      '黑名单文件夹',
-      this.settings.rag?.indexBlacklist || [],
-      async (val) => {
-        if (!this.settings.rag) this.settings.rag = {};
-        this.settings.rag.indexBlacklist = val;
-        await this.plugin.saveSettings();
-      },
-      '排除这些文件夹下的内容（留空则不过滤）'
-    );
+        text.inputEl.addEventListener('blur', async () => {
+          if (!this.settings.rag) this.settings.rag = {};
+          this.settings.rag.indexWhitelist = text.getValue().split('\n').map(s => s.trim()).filter(Boolean);
+          await this.plugin.saveSettings();
+          new Notice('RAG 白名单已保存并生效');
+          console.log('[RAG] 当前白名单:', this.settings.rag.indexWhitelist);
+        });
+      });
+    new Setting(containerEl)
+      .setName('黑名单文件夹')
+      .setDesc('排除这些文件夹下的内容（留空则不过滤）')
+      .addTextArea(text => {
+        text
+          .setValue((this.settings.rag?.indexBlacklist || []).join('\n'))
+          .onChange(async (value) => {
+            if (!this.settings.rag) this.settings.rag = {};
+            this.settings.rag.indexBlacklist = value.split('\n').map(s => s.trim()).filter(Boolean);
+            await this.plugin.saveSettings();
+            new Notice('RAG 黑名单已保存并生效');
+            console.log('[RAG] 当前黑名单:', this.settings.rag.indexBlacklist);
+          });
+        text.inputEl.addEventListener('blur', async () => {
+          if (!this.settings.rag) this.settings.rag = {};
+          this.settings.rag.indexBlacklist = text.getValue().split('\n').map(s => s.trim()).filter(Boolean);
+          await this.plugin.saveSettings();
+          new Notice('RAG 黑名单已保存并生效');
+          console.log('[RAG] 当前黑名单:', this.settings.rag.indexBlacklist);
+        });
+      });
     // 恢复默认按钮
     new Setting(containerEl)
       .addButton(btn => btn

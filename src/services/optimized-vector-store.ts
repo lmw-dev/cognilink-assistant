@@ -58,6 +58,12 @@ export class OptimizedVectorStore {
       return;
     }
 
+    // 环境检测：仅允许在 Node.js/Electron 主进程下初始化 LanceDB
+    if (typeof process === 'undefined' || !(process as any).versions?.node) {
+      this.logger.error('LanceDB is not available: 当前环境不支持 Node.js (仅主进程可用)。已自动降级，所有向量操作将被忽略。');
+      throw new Error('LanceDB is not available in this environment (must run in Node.js/Electron main process)');
+    }
+
     try {
       this.logger.info('Initializing LanceDB vector store...');
       
@@ -89,6 +95,10 @@ export class OptimizedVectorStore {
     * 动态导入LanceDB
     */
    private async importLanceDB(): Promise<any> {
+     // 环境检测：仅允许在 Node.js/Electron 主进程下导入 LanceDB
+     if (typeof process === 'undefined' || !(process as any).versions?.node) {
+       throw new Error('LanceDB is not available in this environment (must run in Node.js/Electron main process)');
+     }
      try {
        // 在Obsidian环境中，需要特殊处理模块导入
        // 使用动态导入避免编译时的模块检查
@@ -132,9 +142,22 @@ export class OptimizedVectorStore {
   }
 
   /**
+   * 降级兼容：所有 public 方法在未初始化时直接返回空/失败结果
+   */
+  private checkAvailable(): boolean {
+    if (!this.isInitialized) {
+      this.logger.warn('LanceDB 未初始化或当前环境不支持，操作已被忽略。');
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * 添加文档
    */
   async addDocuments(documents: VectorDocument[]): Promise<void> {
+    if (!this.checkAvailable()) return;
+    
     await this.ensureInitialized();
     
     if (!documents.length) {
@@ -170,6 +193,8 @@ export class OptimizedVectorStore {
    * 更新文档
    */
   async updateDocument(id: string, document: VectorDocument): Promise<void> {
+    if (!this.checkAvailable()) return;
+
     await this.ensureInitialized();
 
     try {
@@ -198,6 +223,8 @@ export class OptimizedVectorStore {
    * 删除文档
    */
   async deleteDocument(id: string): Promise<void> {
+    if (!this.checkAvailable()) return;
+
     await this.ensureInitialized();
 
     try {
@@ -214,8 +241,7 @@ export class OptimizedVectorStore {
    * 文本查询搜索
    */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
-    // 这里需要先将query转换为向量，然后调用searchByVector
-    // 为了简化，这里返回空结果，实际实现需要集成嵌入服务
+    if (!this.checkAvailable()) return [];
     this.logger.warn('Text search not implemented, use searchByVector instead');
     return [];
   }
@@ -224,6 +250,8 @@ export class OptimizedVectorStore {
    * 向量搜索
    */
   async searchByVector(vector: number[], options: SearchOptions = {}): Promise<SearchResult[]> {
+    if (!this.checkAvailable()) return [];
+
     await this.ensureInitialized();
 
     try {
@@ -285,6 +313,7 @@ export class OptimizedVectorStore {
    * 批量添加
    */
   async batchAdd(documents: VectorDocument[]): Promise<BatchResult> {
+    if (!this.checkAvailable()) return { success: false, processedCount: 0, failedCount: documents.length, errors: [{ index: -1, error: 'LanceDB not available' }] };
     const startTime = Date.now();
     let processedCount = 0;
     let failedCount = 0;
@@ -333,6 +362,7 @@ export class OptimizedVectorStore {
    * 批量更新
    */
   async batchUpdate(updates: { id: string; document: VectorDocument }[]): Promise<BatchResult> {
+    if (!this.checkAvailable()) return { success: false, processedCount: 0, failedCount: updates.length, errors: [{ index: -1, error: 'LanceDB not available' }] };
     const startTime = Date.now();
     let processedCount = 0;
     let failedCount = 0;
@@ -368,6 +398,8 @@ export class OptimizedVectorStore {
    * 获取文档数量
    */
   async getDocumentCount(): Promise<number> {
+    if (!this.checkAvailable()) return 0;
+    
     await this.ensureInitialized();
     
     try {
@@ -384,6 +416,8 @@ export class OptimizedVectorStore {
    * 优化数据库
    */
   async optimize(): Promise<void> {
+    if (!this.checkAvailable()) return;
+    
     await this.ensureInitialized();
     
     try {
@@ -401,6 +435,8 @@ export class OptimizedVectorStore {
    * 备份数据库
    */
   async backup(): Promise<string> {
+    if (!this.checkAvailable()) return '';
+    
     await this.ensureInitialized();
     
     try {
@@ -424,6 +460,8 @@ export class OptimizedVectorStore {
    * 恢复数据库
    */
   async restore(backupPath: string): Promise<void> {
+    if (!this.checkAvailable()) return;
+    
     try {
       this.logger.info(`Restoring from backup: ${backupPath}`);
       
