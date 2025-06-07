@@ -423,7 +423,8 @@ export class PlatformTemplateManager {
       blog: 0,
       toutiao: 0,
       zhihu: 0,
-      douyin: 0
+      douyin: 0,
+      linkedin: 0
     };
     let totalLoadTime = 0;
     let totalRenderTime = 0;

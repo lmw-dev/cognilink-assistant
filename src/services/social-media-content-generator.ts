@@ -335,8 +335,9 @@ export class SocialMediaContentGenerator {
     options: ContentGenerationOptions
   ): Promise<Array<{ title: string; content: string; path: string }>> {
     try {
+      // 优化：只用 topic 作为检索主题，不拼接平台要求/内容要求
       const searchResults = await this.embeddingService.findRelevantNotes(
-        topic,
+        topic, // 只用主题
         options.maxSourceNotes || 5,
         0.7 // threshold
       );

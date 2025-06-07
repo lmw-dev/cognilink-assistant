@@ -1,83 +1,173 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AdvancedPromptTemplate, PromptVariable, FewShotExample } from '../../types/prompt-advanced';
-import { SocialMediaPlatform, PlatformId, FormatRules } from '../../types/social-media';
-import { EnhancedPromptTemplateService } from '../../services/prompt/EnhancedPromptTemplateService';
-import { PromptModuleService } from '../../services/prompt/PromptModuleService';
-import { ContentQualityEvaluator } from '../../services/content-quality-evaluator';
-import { PlatformContentAnalyzer } from '../../services/prompt/PlatformContentAnalyzer';
-import { AIService } from '../../services/AIService';
-import { Message } from '../../types/message';
-
 import { PromptTemplateManager } from '../prompt/PromptTemplateManager';
 import { LayeredPromptEditor } from '../prompt/LayeredPromptEditor';
+import { AIService } from '../../services/AIService';
+import { 
+  AdvancedPromptTemplate, 
+  FeedbackData,
+  HistoryItem,
+  PlatformId,
+  GenerationOptions,
+  AntiAIDetectionStrategy
+} from '../../types/prompt-advanced';
+import { EnhancedPromptTemplateService } from '../../services/prompt/EnhancedPromptTemplateService';
+import { ContentQualityEvaluator } from '../../services/content-quality-evaluator';
+import { PlatformContentAnalyzer } from '../../services/prompt/PlatformContentAnalyzer';
+import { PromptModuleService } from '../../services/prompt/PromptModuleService';
+import { Message } from '../../types/message';
 
-// --- Placeholder Components ---
-interface GeneratedContentDisplayProps { 
-  content: string; 
-  platform: SocialMediaPlatform;
-  isLoading: boolean;
-  error?: string;
-}
-const GeneratedContentDisplay: React.FC<GeneratedContentDisplayProps> = ({ content, platform, isLoading, error }) => (
-  <div className="generated-content-display" style={{ border: '1px solid #eee', padding: '10px', marginTop: '15px', minHeight: '150px', background: '#fdfdfd' }}>
-    <h4>Generated Content for {platform.name}</h4>
-    {isLoading && <p>Loading...</p>}
-    {error && <p style={{color: 'red'}}>Error: {error}</p>}
-    {!isLoading && !error && (
-      <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content || 'Content will appear here after generation.'}</pre>
-    )}
-  </div>
-);
+// --- Minimal Inline Type Definitions (Temporary for UI fix) ---
+// These should ideally be imported from '../../types/prompt-advanced.ts'
+// If that file is broken or missing exports, these are placeholders.
+// (REMOVED: type PlatformId, interface FeedbackData, interface HistoryItem, interface GenerationOptions)
+// --- End Minimal Inline Type Definitions ---
 
-interface FeedbackCollectorProps { 
-  generatedContentId: string | null; 
-  onSubmit: (feedback: { rating: number; comments?: string; issues?: string[] }) => void;
+interface PanelDisplayPlatform {
+  id: PlatformId;
+  name: string;
 }
-const FeedbackCollector: React.FC<FeedbackCollectorProps> = ({ generatedContentId, onSubmit }) => {
-  const [rating, setRating] = useState(0);
-  if (!generatedContentId) return null;
-  return (
-    <div className="feedback-collector" style={{ marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
-      <h5>Rate this content (ID: {generatedContentId}):</h5>
-      <div>{[1,2,3,4,5].map(r => <button key={r} onClick={() => setRating(r)} style={{background: rating === r ? '#007bff' : '#eee', marginRight: '5px'}}>{r}</button>)}</div>
-      {/* Add comment box and issue types if needed */}
-      <button onClick={() => onSubmit({ rating })} style={{marginTop: '5px'}} disabled={rating === 0}>Submit Feedback</button>
-    </div>
-  );
+
+const MOCK_PLATFORMS: PanelDisplayPlatform[] = [
+  { id: 'blog', name: 'Blog' },
+  { id: 'twitter', name: 'Twitter' },
+  { id: 'linkedin', name: 'LinkedIn' },
+];
+
+const getPlatformObject = (platformId: PlatformId | undefined): PanelDisplayPlatform => {
+  const found = MOCK_PLATFORMS.find(p => p.id === platformId);
+  return found || MOCK_PLATFORMS[0]; // Default to blog if undefined or not found
 };
 
-interface HistoryItem {
-  id: string;
-  timestamp: Date;
-  templateUsed: string;
-  generatedContentSummary: string;
-}
-interface HistoryManagerProps { 
-  history: HistoryItem[]; 
-  onSelectItem: (item: HistoryItem) => void;
-}
-const HistoryManager: React.FC<HistoryManagerProps> = ({ history, onSelectItem }) => (
-  <div className="history-manager" style={{ marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
-    <h5>Generation History</h5>
-    {history.length === 0 && <p>No history yet.</p>}
-    <ul style={{ listStyle: 'none', padding: 0}}>
-      {history.map(item => (
-        <li key={item.id} onClick={() => onSelectItem(item)} style={{cursor: 'pointer', padding: '5px', borderBottom: '1px dashed #f0f0f0'}}>
-          {item.timestamp.toLocaleTimeString()}: {item.templateUsed} - {item.generatedContentSummary.substring(0,30)}...
-        </li>
-      ))}
-    </ul>
-  </div>
-);
-// --- End Placeholder Components ---
+const GeneratedContentDisplay: React.FC<{ content: string | null; platform: PanelDisplayPlatform; isLoading: boolean; error: string | null }> = 
+  ({ content, platform, isLoading, error }) => {
+    if (isLoading) return <div style={{padding: '10px', color: 'var(--text-muted)'}}>Loading content...</div>;
+  if (error) return <div style={{padding: '10px', color: 'var(--text-error)'}}>Error: {error}</div>;
+    if (!content) return <div style={{padding: '10px', color: 'var(--text-faint)'}}>Content will appear here after generation.</div>;
+    return <div style={{padding: '10px', border: '1px solid var(--background-modifier-border)', borderRadius: 'var(--radius-m)', whiteSpace: 'pre-wrap', backgroundColor: 'var(--background-secondary)'}}><h4>Generated Content for {platform.name}</h4><p>{content}</p></div>;
+};
 
-export interface SmartAssistantPanelProps {
+const FeedbackCollector: React.FC<{ generatedContentId: string; onSubmit: (data: FeedbackData) => void }> = 
+  ({ generatedContentId, onSubmit }) => {
+    const [rating, setRating] = useState(0);
+    const [comments, setComments] = useState('');
+    return (
+      <div style={{padding: '10px', borderTop: '1px solid var(--background-modifier-border)', marginTop: '10px'}}>
+        <h5>Feedback for {generatedContentId.substring(0,10)}...</h5>
+        <input type="number" value={rating} onChange={(e) => setRating(parseInt(e.target.value,10))} placeholder="Rating (0-5)" style={{marginRight: '5px'}} />
+        <input type="text" value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Comments" style={{marginRight: '5px'}} />
+        <button onClick={() => onSubmit({ contentId: generatedContentId, rating, comments, issues: [] })} >Submit Feedback</button>
+      </div>
+    );
+};
+
+const HistoryManager: React.FC<{ history: HistoryItem[]; onSelectItem: (item: HistoryItem) => void }> = 
+  ({ history, onSelectItem }) => {
+    if (!history.length) return <div style={{padding: '10px', color: 'var(--text-faint)'}}>No history yet.</div>;
+    return (
+      <div style={{padding: '10px', borderTop: '1px solid var(--background-modifier-border)', marginTop: '10px'}}>
+        <h5>Generation History</h5>
+        <ul style={{listStyle: 'none', padding: 0}}>
+          {history.map(item => (
+            <li key={item.id} onClick={() => onSelectItem(item)} style={{padding: '5px', borderBottom: '1px solid var(--background-modifier-border-hover)', cursor: 'pointer'}}>
+              {item.templateId} - {item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : 'Invalid Date'}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+};
+
+interface SmartAssistantPanelProps {
   templateService: EnhancedPromptTemplateService;
   promptModuleService: PromptModuleService;
   qualityEvaluator: ContentQualityEvaluator;
   platformAnalyzer: PlatformContentAnalyzer;
-  aiGenerationService: AIService;
+  aiGenerationService: AIService; 
 }
+
+// --- 内联样式优化 for Obsidian 右侧栏 ---
+const panelStyles: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  minWidth: 320,
+  width: '100%',
+  height: '100%',
+  boxSizing: 'border-box',
+  padding: '8px 6px',
+  gap: 8,
+  background: 'var(--background-secondary-alt)'
+};
+const sectionStyles: React.CSSProperties = {
+  background: 'var(--background-primary)',
+  borderRadius: 6,
+  padding: '6px 4px',
+  marginBottom: 6,
+  boxShadow: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6
+};
+const tabBarStyles: React.CSSProperties = {
+  display: 'flex',
+  gap: 2,
+  marginBottom: 4
+};
+const tabBtnStyles: React.CSSProperties = {
+  fontSize: 13,
+  padding: '4px 10px',
+  minWidth: 0,
+  border: 'none',
+  borderRadius: 4,
+  background: 'var(--background-secondary)',
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
+  marginRight: 2
+};
+const tabBtnActive: React.CSSProperties = {
+  ...tabBtnStyles,
+  background: 'var(--interactive-accent)',
+  color: 'var(--text-on-accent)',
+  fontWeight: 600
+};
+const inputStyles: React.CSSProperties = {
+  fontSize: 13,
+  padding: '4px 6px',
+  minHeight: 32,
+  width: '100%',
+  borderRadius: 4,
+  border: '1px solid var(--background-modifier-border)',
+  background: 'var(--background-secondary)'
+};
+const btnStyles: React.CSSProperties = {
+  fontSize: 13,
+  padding: '4px 10px',
+  borderRadius: 4,
+  border: 'none',
+  marginRight: 4,
+  cursor: 'pointer',
+  background: 'var(--interactive-accent)',
+  color: 'var(--text-on-accent)'
+};
+const btnSecondary: React.CSSProperties = {
+  ...btnStyles,
+  background: 'var(--background-modifier-border)',
+  color: 'var(--text-muted)'
+};
+const metaText: React.CSSProperties = {
+  fontSize: 12,
+  color: 'var(--text-faint)',
+  margin: '2px 0 6px 0'
+};
+const previewBox: React.CSSProperties = {
+  fontSize: 12,
+  background: 'var(--background-secondary)',
+  border: '1px solid var(--background-modifier-border)',
+  borderRadius: 4,
+  padding: 6,
+  minHeight: 24,
+  marginTop: 4,
+  color: 'var(--text-error)'
+};
 
 export const SmartAssistantPanel: React.FC<SmartAssistantPanelProps> = ({
   templateService,
@@ -89,38 +179,48 @@ export const SmartAssistantPanel: React.FC<SmartAssistantPanelProps> = ({
   const [activeView, setActiveView] = useState<'manager' | 'editor'>('manager');
   const [selectedTemplate, setSelectedTemplate] = useState<AdvancedPromptTemplate | null>(null);
   const [currentTopic, setCurrentTopic] = useState<string>('');
-  const [targetPlatform, setTargetPlatform] = useState<SocialMediaPlatform | null>(null);
-  const [generatedContent, setGeneratedContent] = useState<string>('');
+  const [targetPlatform, setTargetPlatform] = useState<PanelDisplayPlatform>(getPlatformObject('blog'));
+  const [generatedContent, setGeneratedContent] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [generationError, setGenerationError] = useState<string | undefined>();
-  const [generationHistory, setGenerationHistory] = useState<HistoryItem[]>([]);
   const [activeGeneratedContentId, setActiveGeneratedContentId] = useState<string | null>(null);
+  const [generationHistory, setGenerationHistory] = useState<HistoryItem[]>([]);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [activeLayer, setActiveLayer] = useState<'system' | 'task' | 'context'>('system');
+  const [systemContent, setSystemContent] = useState('Define AI role, background, and basic behavior...');
+  const [taskContent, setTaskContent] = useState('Define the specific task and goals...');
+  const [contextContent, setContextContent] = useState('Describe user input and context handling...');
 
   const handleTemplateSelect = useCallback((template: AdvancedPromptTemplate) => {
     setSelectedTemplate(template);
-    setActiveView('editor');
+    setTargetPlatform(getPlatformObject(template.platform));
   }, []);
 
-  const handleTemplateCreate = useCallback(() => {
-    // For new template, ensure LayeredPromptEditor gets a null or a basic new template structure
-    // It's important that `id` is not set for `createTemplate`.
-    const newTemplateShell: Omit<AdvancedPromptTemplate, 'id' | 'createdAt' | 'updatedAt'> & { id?: string } = {
-        name: 'New Prompt Template',
-        platform: targetPlatform?.id || 'blog', // Default or last used platform
-        category: 'custom', // Default category
-        tags: [],
-        systemPrompt: '',
-        taskPrompt: '',
-        contextPrompt: '',
-        outputPrompt: '',
-        variables: [],
-        examples: [],
-        qualityRules: [],
-        antiAISettings: {} as any, // Provide default or empty object
-        version: '1.0.0',
-        usageCount: 0,
-    };
-    setSelectedTemplate(newTemplateShell as AdvancedPromptTemplate); // Cast for editor, but save logic will handle omit
+  const handleTemplateCreate = useCallback((newTemplateInitial?: AdvancedPromptTemplate) => {
+    if (newTemplateInitial) {
+        setSelectedTemplate(newTemplateInitial); 
+    } else {
+        const freshTemplate: AdvancedPromptTemplate = {
+            id: `new-${Date.now()}`,
+            name: 'New Untitled Template',
+            version: '1.0',
+            description: '',
+            platform: targetPlatform?.id || 'blog', 
+            category: 'custom',
+            tags: [],
+            systemPrompt: '',
+            taskPrompt: '',
+            contextPrompt: '',
+            outputPrompt: '',
+            variables: [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            examples: [],
+            qualityRules: [],
+            usageCount: 0,
+            antiAISettings: { strategy: 'none' } as any,
+        };
+        setSelectedTemplate(freshTemplate);
+    }
     setActiveView('editor');
   }, [targetPlatform]);
 
@@ -128,168 +228,206 @@ export const SmartAssistantPanel: React.FC<SmartAssistantPanelProps> = ({
     setSelectedTemplate(updatedTemplate);
   }, []);
 
-  const handleSaveTemplate = useCallback(async (templateToSave: AdvancedPromptTemplate) => {
+  const handleSaveTemplate = async (templateToSave: AdvancedPromptTemplate) => {
+    if (!templateToSave) return;
     try {
-      if (templateToSave.id && templateToSave.createdAt) { // Simple check if it's an existing template
+      let finalTemplate: AdvancedPromptTemplate | undefined;
+      if (templateToSave.id && !templateToSave.id.startsWith('new-') && templateToSave.createdAt) {
         await templateService.updateTemplate(templateToSave.id, templateToSave);
-        setSelectedTemplate(templateToSave); // Assume update doesn't change the object reference drastically here
-        console.log('Template updated:', templateToSave.id);
+        const fetched = await templateService.getTemplate(templateToSave.id);
+        if (fetched != null) {
+          finalTemplate = fetched;
+        } else {
+          finalTemplate = templateToSave;
+        }
+        console.log('Template updated');
       } else {
-        // For creation, omit id, createdAt, updatedAt as expected by createTemplate
-        const { id, createdAt, updatedAt, ...creatableTemplate } = templateToSave;
-        const newId = await templateService.createTemplate(creatableTemplate);
-        const newTemplate = await templateService.getTemplate(newId);
-        if (newTemplate) setSelectedTemplate(newTemplate);
-        console.log('Template created:', newId);
+        const { id, createdAt, updatedAt, ...creatablePart } = templateToSave;
+        const newId = await templateService.createTemplate(creatablePart as Omit<AdvancedPromptTemplate, 'id' | 'createdAt' | 'updatedAt'>);
+        const fetched = await templateService.getTemplate(newId);
+        if (fetched != null) {
+          finalTemplate = fetched;
+        } else {
+          finalTemplate = templateToSave;
+        }
+        console.log('Template created');
       }
+      if (finalTemplate) {
+        setSelectedTemplate(finalTemplate);
+      }
+      alert('Template saved successfully!');
+      setActiveView('manager');
     } catch (error) {
-      console.error('Failed to save template:', error);
-      throw error;
+      console.error('Error saving template:', error);
+      alert('Failed to save template. See console for details.');
     }
-  }, [templateService]);
-
-  const getPlatformObject = (platformId: PlatformId): SocialMediaPlatform => {
-    return {
-        id: platformId,
-        name: platformId.charAt(0).toUpperCase() + platformId.slice(1),
-        maxLength: 10000,
-        styleKeywords: [],
-        requiredElements: [],
-        formatRules: {} as FormatRules,
-    };
   };
 
-  useEffect(() => {
-    if (selectedTemplate && selectedTemplate.platform) {
-      setTargetPlatform(getPlatformObject(selectedTemplate.platform));
-    } else if (!targetPlatform) {
-      setTargetPlatform(getPlatformObject('blog'));
-    }
-  }, [selectedTemplate, targetPlatform]);
-
-  const handleGenerateContent = useCallback(async () => {
+  const handleGenerateContent = async () => {
     if (!selectedTemplate || !currentTopic || !targetPlatform) {
-      setGenerationError('Template, topic, and target platform must be selected.');
+      setGenerationError('Missing template, topic, or target platform.');
       return;
     }
     setIsGenerating(true);
-    setGenerationError(undefined);
-    setGeneratedContent('');
+    setGeneratedContent(null);
+    setGenerationError(null);
     setActiveGeneratedContentId(null);
 
     try {
-      let combinedPrompt = [
-        selectedTemplate.systemPrompt,
-        selectedTemplate.taskPrompt,
-        selectedTemplate.contextPrompt,
-        selectedTemplate.outputPrompt,
-      ].filter(Boolean).join('\n\n---\n\n');
-
-      // Simple topic injection if a placeholder like {{topic}} is in the prompt
-      // More robust templating (like mustache.js) would be better in a real app.
-      combinedPrompt = combinedPrompt.replace(/\{\{\s*topic\s*\}\}/gi, currentTopic);
-      
-      const platformSpecificFinalPrompt = await platformAnalyzer.generatePlatformSpecificPrompt(
-        combinedPrompt, 
-        targetPlatform 
-        // Removed third argument: { topic: currentTopic }
-      );
-
-      // Use sendMessage instead of generateText
-      const userMessage: Message = {
-        id: `msg-${Date.now()}`,
-        role: 'user',
-        content: platformSpecificFinalPrompt,
-        timestamp: Date.now(),
-        //threadId: // Optional: manage threads if needed
+      const generationOptions: GenerationOptions = {
+        topic: currentTopic,
+        platformId: targetPlatform.id,
       };
+      
+      const substituteTopic = (promptText: string) => promptText.replace(/\{topic\}/g, currentTopic);
+      const systemP = substituteTopic(selectedTemplate.systemPrompt || '');
+      const taskP = substituteTopic(selectedTemplate.taskPrompt || '');
+      const contextP = substituteTopic(selectedTemplate.contextPrompt || '');
+      const outputP = substituteTopic(selectedTemplate.outputPrompt || '');
 
+      let fullContent = '';
+      if (systemP) fullContent += `System Hint: ${systemP}\n\n`;
+      fullContent += `Task: ${taskP}`;
+      if (contextP) fullContent += `\n\nContext: ${contextP}`;
+      if (outputP) fullContent += `\n\nOutput Instructions: ${outputP}`;
+
+      const userMessage: Message = {
+        id: `msg-user-${Date.now()}`,
+        role: 'user',
+        content: fullContent,
+        timestamp: Date.now(),
+      };
+      
       const assistantResponse = await aiGenerationService.sendMessage(userMessage);
-      const result = assistantResponse.content;
+      const generatedText = assistantResponse.content;
+      setGeneratedContent(generatedText);
 
-      setGeneratedContent(result);
-      const newHistoryId = `gen_${Date.now()}`;
-      setActiveGeneratedContentId(newHistoryId);
-      setGenerationHistory(prev => [
-        { id: newHistoryId, timestamp: new Date(), templateUsed: selectedTemplate.name, generatedContentSummary: result.substring(0,50) },
-        ...prev
-      ].slice(0,10));
+      const newHistoryItem: HistoryItem = {
+        id: `gen-${Date.now()}`,
+        templateId: selectedTemplate.id,
+        timestamp: new Date().toISOString(),
+        request: { topic: currentTopic, platform: targetPlatform.name, options: generationOptions },
+        response: generatedText,
+      };
+      setGenerationHistory(prev => [newHistoryItem, ...prev.slice(0, 19)]);
+      setActiveGeneratedContentId(newHistoryItem.id);
 
     } catch (error) {
-      console.error('Content generation failed:', error);
-      setGenerationError(error instanceof Error ? error.message : String(error));
+      console.error('Error generating content:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setGenerationError(`Failed to generate content: ${errorMessage}`);
     } finally {
       setIsGenerating(false);
     }
-  }, [selectedTemplate, currentTopic, targetPlatform, platformAnalyzer, aiGenerationService]);
+  };
 
-  const handleFeedbackSubmit = useCallback((feedback: { rating: number; comments?: string; issues?: string[] }) => {
-    console.log('Feedback submitted for content ID:', activeGeneratedContentId, feedback);
-  }, [activeGeneratedContentId]);
+  const handleFeedbackSubmit = async (feedback: FeedbackData) => {
+    console.log('Feedback submitted:', feedback);
+    alert('Feedback submitted! (Logged to console)');
+  };
+  
+  const layerTabs = [
+    { key: 'system', label: 'System Layer' },
+    { key: 'task', label: 'Task Layer' },
+    { key: 'context', label: 'Context Layer' }
+  ];
+
+  const renderLayerContent = () => {
+    if (activeLayer === 'system') {
+      return (
+        <>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>System Layer</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Role definition and basic rules</div>
+          <textarea
+            style={{ ...inputStyles, minHeight: 48, marginBottom: 4 }}
+            value={systemContent}
+            onChange={e => setSystemContent(e.target.value)}
+            placeholder="Define AI role, background, and basic behavior..."
+          />
+          <div style={metaText}><b>Variables:</b> No variables defined.</div>
+          <div style={metaText}><b>Examples:</b> No examples defined.</div>
+          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+            <button style={btnSecondary}>Preview</button>
+            <button style={btnStyles}>Save Template</button>
+          </div>
+          <div className="live-preview small" style={previewBox}>Error generating preview.</div>
+        </>
+      );
+    }
+    if (activeLayer === 'task') {
+      return (
+        <>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Task Layer</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Specific task and goals</div>
+          <textarea
+            style={{ ...inputStyles, minHeight: 48, marginBottom: 4 }}
+            value={taskContent}
+            onChange={e => setTaskContent(e.target.value)}
+            placeholder="Define the specific task and goals..."
+          />
+          <div style={metaText}><b>Variables:</b> No variables defined.</div>
+          <div style={metaText}><b>Examples:</b> No examples defined.</div>
+          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+            <button style={btnSecondary}>Preview</button>
+            <button style={btnStyles}>Save Template</button>
+          </div>
+          <div className="live-preview small" style={previewBox}>Error generating preview.</div>
+        </>
+      );
+    }
+    if (activeLayer === 'context') {
+      return (
+        <>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Context Layer</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>User input and context handling</div>
+          <textarea
+            style={{ ...inputStyles, minHeight: 48, marginBottom: 4 }}
+            value={contextContent}
+            onChange={e => setContextContent(e.target.value)}
+            placeholder="Describe user input and context handling..."
+          />
+          <div style={metaText}><b>Variables:</b> No variables defined.</div>
+          <div style={metaText}><b>Examples:</b> No examples defined.</div>
+          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+            <button style={btnSecondary}>Preview</button>
+            <button style={btnStyles}>Save Template</button>
+          </div>
+          <div className="live-preview small" style={previewBox}>Error generating preview.</div>
+        </>
+      );
+    }
+    return null;
+  };
 
   return (
-    <div className="smart-assistant-panel" style={{ display: 'flex', height: 'calc(100vh - 40px)', margin: '20px', border: '1px solid #ccc' }}>
-      {/* Left Panel: Template Manager or Editor */} 
-      <div className="left-panel" style={{ flex: 1, borderRight: '1px solid #ccc', padding: '10px', overflowY: 'auto' }}>
-        {activeView === 'manager' && (
-          <PromptTemplateManager
-            templateService={templateService}
-            platformManager={promptModuleService}
-            qualityEvaluator={qualityEvaluator}
-            onTemplateSelect={handleTemplateSelect}
-            onTemplateCreate={handleTemplateCreate}
-          />
-        )}
-        {activeView === 'editor' && (
-          <LayeredPromptEditor
-            template={selectedTemplate} 
-            onChange={handleTemplateChange}
-            onSave={handleSaveTemplate} 
-            qualityEvaluator={qualityEvaluator}
-            platformAnalyzer={platformAnalyzer}
-          />
-        )}
-        <button onClick={() => setActiveView(activeView === 'manager' ? 'editor' : 'manager')} style={{marginTop: '10px'}}>
-          {activeView === 'manager' ? (selectedTemplate ? 'Edit Selected' : 'Create New') : 'Back to Manager'}
-        </button>
-      </div>
-
-      {/* Right Panel: Content Generation & Interaction */} 
-      <div className="right-panel" style={{ flex: 1, padding: '10px', display: 'flex', flexDirection: 'column' }}>
-        <h3>Content Generation</h3>
-        <div>
-          <label htmlFor="topic-input" style={{marginRight: '5px'}}>Topic/Context:</label>
-          <input 
-            id="topic-input"
-            type="text" 
-            value={currentTopic} 
-            onChange={(e) => setCurrentTopic(e.target.value)} 
-            placeholder="Enter topic or user query"
-            style={{width: 'calc(100% - 100px)', padding: '8px', marginBottom: '10px'}}
-          />
+    <div className="smart-assistant-panel vertical" style={panelStyles}>
+      {/* 分层编辑区（Tab切换） */}
+      <div className="layer-editor compact" style={sectionStyles}>
+        <div className="layer-tabs small" style={tabBarStyles}>
+          {layerTabs.map(tab => (
+            <button
+              key={tab.key}
+              style={activeLayer === tab.key ? tabBtnActive : tabBtnStyles}
+              onClick={() => setActiveLayer(tab.key as any)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        {/* Platform Selector could be added here if not solely derived from template */}
-        {targetPlatform && <p>Target Platform: <strong>{targetPlatform.name}</strong></p>}
-
-        <button onClick={handleGenerateContent} disabled={isGenerating || !selectedTemplate || !currentTopic || !targetPlatform} style={{padding: '10px 15px', fontSize: '1em'}}>
-          {isGenerating ? 'Generating...' : 'Generate Content'}
-        </button>
-
-        <GeneratedContentDisplay 
-          content={generatedContent} 
-          platform={targetPlatform || getPlatformObject('blog')} 
-          isLoading={isGenerating}
-          error={generationError}
-        />
-        
-        {activeGeneratedContentId && 
-          <FeedbackCollector 
-            generatedContentId={activeGeneratedContentId} 
-            onSubmit={handleFeedbackSubmit} 
-          />
-        }
-
-        <HistoryManager history={generationHistory} onSelectItem={(item) => console.log('History item selected', item)} />
+        <div className="layer-content">
+          {renderLayerContent()}
+        </div>
+        <button style={{ ...btnStyles, width: '100%', marginTop: 8 }}>Back to Template Manager</button>
+      </div>
+      {/* 内容生成区 */}
+      <div className="content-generation compact" style={sectionStyles}>
+        <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 8 }}>Content Generation</div>
+        <label htmlFor="topic-input" style={{ fontSize: 12, marginBottom: 2 }}>Topic/Context:</label>
+        <input id="topic-input" type="text" style={inputStyles} placeholder="Enter topic or user query" />
+        <div className="platform-info small" style={metaText}>Target Platform: <b>Blog</b></div>
+        <button style={{ ...btnStyles, width: '100%', margin: '8px 0' }}>Generate Content</button>
+        <div className="generated-content small" style={previewBox}>Content will appear here after generation.</div>
+        <div className="history small" style={metaText}>No history yet.</div>
       </div>
     </div>
   );

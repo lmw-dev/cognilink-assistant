@@ -4,6 +4,7 @@
  */
 
 import { SocialMediaPlatform, PlatformId } from './social-media';
+export type { PlatformId } from './social-media';
 
 // 提示词分类类型
 export type PromptCategory = 
@@ -441,4 +442,26 @@ export const extractVariablesFromPrompt = (prompt: string): string[] => {
   const variablePattern = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
   const matches = prompt.match(variablePattern);
   return matches ? matches.map(match => match.slice(1, -1)) : [];
-}; 
+};
+
+export interface FeedbackData {
+  contentId: string;
+  rating: number;
+  comments?: string;
+  issues?: string[];
+}
+
+export interface HistoryItem {
+  id: string;
+  templateId: string;
+  timestamp: string;
+  request: any;
+  response: string;
+  qualityScore?: number;
+}
+
+export interface GenerationOptions {
+  topic: string;
+  platformId: PlatformId;
+  [key: string]: any;
+} 

@@ -604,6 +604,32 @@ ${references.map(ref => `- ${ref.replace(/^[参考资料来源引用：:]+\s*/, 
               </div>
             </div>
             <ContentPreviewWithReferences content={generatedContent.content} plugin={plugin} />
+            {/* 优化分析结果展示 */}
+            {generatedContent.optimization && (
+              <div className="sm-optimization-analysis-wrapper">
+                <div className="sm-section-header">
+                  <h3>平台内容优化分析</h3>
+                </div>
+                <div className="sm-optimization-summary">
+                  <strong>优化摘要：</strong> {generatedContent.optimization.optimizationSummary || '无'}<br/>
+                  <strong>优化前分数：</strong> {generatedContent.optimization.scoreBefore ?? '-'} / <strong>优化后分数：</strong> {generatedContent.optimization.scoreAfter ?? '-'}<br/>
+                  <strong>优化信心：</strong> {typeof generatedContent.optimization.confidence === 'number' ? (generatedContent.optimization.confidence * 100).toFixed(0) + '%' : '-'}
+                </div>
+                <div className="sm-optimization-changes">
+                  <strong>主要优化建议：</strong>
+                  <ul>
+                    {generatedContent.optimization.changes.slice(0, 3).map((change, idx) => (
+                      <li key={idx}>
+                        <span>[{change.type}]</span> {change.description}
+                        {change.impactScore !== undefined && (
+                          <span style={{marginLeft: 8, color: '#888'}}>影响分: {change.impactScore}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
             
             {generatedContent.warnings && generatedContent.warnings.length > 0 && (
               <div className="sm-content-warnings">

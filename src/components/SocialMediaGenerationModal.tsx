@@ -5,6 +5,7 @@ import CogniLinkPlugin from '../main';
 import { SocialMediaContentUI } from './SocialMediaContentUI';
 import { SocialMediaPlatform, GeneratedContent, ContentGenerationOptions, PlatformId } from '../types/social-media';
 import { QualityEvaluationResult } from '../types/quality-assessment';
+import { combinePromptLayers } from '../types/prompt-advanced';
 
 export class SocialMediaGenerationModal extends Modal {
   private plugin: CogniLinkPlugin;
@@ -150,6 +151,77 @@ export class SocialMediaGenerationModal extends Modal {
     options: ContentGenerationOptions
   ): Promise<GeneratedContent> {
     try {
+      // DEBUG: 进入主分支
+      console.log('【DEBUG】进入主分支 handleGenerateContent');
+      // 优先用 PromptModuleService 分层模板体系
+      if ('promptModuleService' in this.plugin && this.plugin.promptModuleService) {
+        const promptModuleService = (this.plugin as any).promptModuleService;
+        // 1. 获取推荐模板
+        const templates = await promptModuleService.getRecommendedTemplates(platform.id, 'social-media-post', 1);
+        const template = templates && templates.length > 0 ? templates[0] : null;
+        if (template) {
+          // 2. 组装分层 prompt
+          let prompt = (typeof combinePromptLayers === 'function'
+            ? combinePromptLayers(template)
+            : [template.systemPrompt, template.taskPrompt, template.contextPrompt, template.outputPrompt].filter(Boolean).join('\n\n'));
+          // 3. 变量替换
+          prompt = prompt
+            .replace(/\{topic\}/g, theme)
+            .replace(/\{platform\}/g, platform.name)
+            .replace(/\{maxLength\}/g, String(platform.maxLength))
+            .replace(/\{styleKeywords\}/g, (platform.styleKeywords || []).join(','));
+          // TODO: 可扩展更多变量
+
+          // 4. 调用 AI 生成内容
+          const message = {
+            id: Date.now().toString(),
+            role: 'user' as const,
+            content: prompt,
+            topic: theme,
+            timestamp: Date.now()
+          };
+          const response = await this.plugin.aiService.sendMessage(message);
+
+          // 5. 组装 GeneratedContent
+          const result: GeneratedContent = {
+            platform,
+            content: response.content,
+            originalContent: response.content,
+            metadata: {
+              topic: theme,
+              generationTime: Date.now(),
+              sourceNotes: [],
+              templateUsed: template.name,
+              processingApplied: ['prompt-module'],
+              fromCache: false
+            },
+            qualityScore: 80,
+            styleAssessment: {},
+            lengthValidation: {},
+            isValid: true,
+            needsReview: false,
+            confidence: 0.8,
+            warnings: [],
+            suggestions: []
+          };
+          // DEBUG: 检查 platformAnalyzer 挂载
+          console.log('【DEBUG】主分支 platformAnalyzer:', this.plugin.platformAnalyzer);
+          // 自动调用优化分析
+          if (this.plugin.platformAnalyzer) {
+            try {
+              result.optimization = await this.plugin.platformAnalyzer.optimizeContentForPlatform(result.content, platform);
+              console.log('【DEBUG】优化分析结果:', result.optimization);
+            } catch (e) {
+              console.warn('内容优化分析失败', e);
+            }
+          }
+          console.log('【DEBUG】handleGenerateContent 返回:', result);
+          return result;
+        }
+      }
+      // fallback: 原有逻辑
+      // DEBUG: 进入 fallback 分支
+      console.log('【DEBUG】进入 fallback 分支 handleGenerateContent');
       console.log('Generating content for:', { platform: platform.id, theme, options });
       
       // 使用插件的社交媒体内容生成服务
@@ -182,6 +254,7 @@ export class SocialMediaGenerationModal extends Modal {
           id: Date.now().toString(),
           role: 'user' as const,
           content: prompt,
+          topic: theme,
           timestamp: Date.now()
         };
 
@@ -221,7 +294,7 @@ export class SocialMediaGenerationModal extends Modal {
           .replace(/\n{3,}/g, '\n\n') // 限制连续换行
           .trim();
         
-        return {
+        const fallbackResult: GeneratedContent = {
           platform,
           content: formattedContent,
           originalContent: response.content,
@@ -242,6 +315,18 @@ export class SocialMediaGenerationModal extends Modal {
           warnings: [],
           suggestions: []
         };
+        // DEBUG: 检查 platformAnalyzer 挂载
+        console.log('【DEBUG】fallback 分支 platformAnalyzer:', this.plugin.platformAnalyzer);
+        if (this.plugin.platformAnalyzer) {
+          try {
+            fallbackResult.optimization = await this.plugin.platformAnalyzer.optimizeContentForPlatform(formattedContent, platform);
+            console.log('【DEBUG】优化分析结果:', fallbackResult.optimization);
+          } catch (e) {
+            console.warn('内容优化分析失败', e);
+          }
+        }
+        console.log('【DEBUG】handleGenerateContent fallback 返回:', fallbackResult);
+        return fallbackResult;
       }
       
     } catch (error) {
@@ -251,13 +336,22 @@ export class SocialMediaGenerationModal extends Modal {
   }
 
   private async handleEvaluateQuality(content: GeneratedContent): Promise<QualityEvaluationResult> {
+    console.log('【DEBUG】handleEvaluateQuality content:', content);
+    if (!content.platform || !content.platform.id) {
+      throw new Error('内容缺少平台信息，无法进行质量评估（content.platform.id 未定义）');
+    }
     try {
       console.log('🔍 开始质量评估 - 内容主题:', content.metadata.topic);
       console.log('📝 内容长度:', content.content.length, '字符');
       
       // 使用插件的质量评估服务
       if ('contentQualityEvaluator' in this.plugin && this.plugin.contentQualityEvaluator) {
-        const result = await (this.plugin as any).contentQualityEvaluator.evaluateContent(content);
+        const result = await (this.plugin as any).contentQualityEvaluator.evaluateContent(
+          content.content,
+          content.platform,
+          content.metadata?.sourceNotes,
+          undefined // 可根据需要传递 options
+        );
         console.log('✅ 质量评估完成 - 使用专用服务');
         return result;
       } else {

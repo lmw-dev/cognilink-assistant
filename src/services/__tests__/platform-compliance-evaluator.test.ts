@@ -102,6 +102,20 @@ describe('PlatformComplianceEvaluator', () => {
         hashtagCount: {min: 1, max: 5}
       },
       features: ['short_video', 'music', 'effects', 'hashtags', 'live']
+    },
+    linkedin: {
+      id: 'linkedin',
+      name: 'LinkedIn',
+      maxLength: 10000,
+      styleKeywords: ['专业', '深度', '分析'],
+      requiredElements: ['structure', 'references', 'data'],
+      formatRules: {
+        professionalTone: true,
+        dataSupport: true,
+        referenceSection: true,
+        headingHierarchy: true
+      },
+      features: ['markdown', 'rich_text', 'images', 'links', 'code']
     }
   };
 

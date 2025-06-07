@@ -4,7 +4,7 @@
  */
 
 // 平台标识符类型
-export type PlatformId = 'xiaohongshu' | 'twitter' | 'wechat' | 'blog' | 'toutiao' | 'zhihu' | 'douyin';
+export type PlatformId = 'xiaohongshu' | 'twitter' | 'wechat' | 'blog' | 'toutiao' | 'zhihu' | 'douyin' | 'linkedin';
 
 // 社交媒体平台接口
 export interface SocialMediaPlatform {
@@ -269,6 +269,7 @@ export interface GeneratedContent {
     message: string;
     impact: number;
   }>;
+  optimization?: import('./ai-detection').OptimizedContent;
 }
 
 // 内容元数据接口

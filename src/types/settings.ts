@@ -1,8 +1,10 @@
-import type { ProviderModelValue } from '../constants/ai-models';
+import type { ProviderModelValue, EmbeddingModelValue } from '../constants/ai-models';
 import { App } from 'obsidian';
-import { AdvancedPromptTemplate } from './prompt-advanced';
+import { AdvancedPromptTemplate, PlatformId } from './prompt-advanced';
+import { Conversation } from './conversation';
+import { EmbeddingProvider } from '../constants/ai-models';
 
-export type AIProvider = 'anthropic' | 'local' | 'openai';
+export type AIProvider = 'anthropic' | 'openai' | 'local' | 'gemini' | 'deepseek';
 export type AIModel = ProviderModelValue;
 export type Theme = 'system' | 'light' | 'dark';
 export type FontSize = 'small' | 'medium' | 'large';
@@ -36,8 +38,12 @@ export interface AISettings {
   anthropicEndpoint?: string;
   openAIApiKey?: string;
   openAIEndpoint?: string;
-  maxTokens: number;
+  geminiApiKey?: string;
+  geminiEndpoint?: string;
+  deepseekApiKey?: string;
+  deepseekEndpoint?: string;
   temperature: number;
+  maxTokens: number;
   defaultSystemPrompt: string;
 }
 
@@ -57,6 +63,9 @@ export interface RAGSettings {
     threshold: number;
     granularity: 'paragraph' | 'sentence';
   };
+  /** TOM-122: 支持RAG白名单/黑名单文件夹索引范围配置 */
+  indexWhitelist?: string[];
+  indexBlacklist?: string[];
 }
 
 export interface PromptModuleSettings {
@@ -92,15 +101,76 @@ export interface PromptModuleSettings {
   };
 }
 
+export interface EmbeddingProviderConfig {
+  model: EmbeddingModelValue;
+  apiKey: string;
+  endpoint: string;
+}
+
+export interface EmbeddingSettings {
+  embeddingProvider: 'openai' | 'gemini';
+  openai: EmbeddingProviderConfig;
+  gemini: EmbeddingProviderConfig;
+}
+
 export interface Settings {
   ui: UISettings;
   ai: AISettings;
+  embedding: EmbeddingSettings;
   shortcuts: Shortcuts;
   rag?: RAGSettings;
   promptModule: PromptModuleSettings;
 }
 
-export type PluginSettings = Settings;
+export interface AIServiceError {
+  code: string | number;
+  message: string;
+  type?: string;
+  param?: string;
+}
+
+const ALL_DEFINED_PLATFORMS_FOR_DEFAULT: PlatformId[] = [
+    'xiaohongshu', 'twitter', 'wechat', 'blog', 'toutiao', 'zhihu', 'douyin', 'linkedin'
+];
+
+export interface PluginSettings {
+  ui: UISettings;
+  ai: AISettings;
+  embedding: EmbeddingSettings;
+  shortcuts: Shortcuts;
+  rag?: RAGSettings;
+  promptModule: PromptModuleSettings;
+  showConversationsInRibbon: boolean;
+  defaultModel: string;
+  defaultTemperature: number;
+  defaultMaxTokens: number;
+  promptTemplates: { [key: string]: string };
+  currentConversationId: string | null;
+  conversations: Array<Conversation>;
+  enableMemory: boolean;
+  maxMemoryTokens: number;
+  autoSaveConversations: boolean;
+  debugMode: boolean;
+  aiProvider: AIProvider;
+  apiKey: string;
+  openAIBaseUrl?: string;
+  googleCloudApiKey?: string;
+  anthropicApiKey?: string;
+  groqApiKey?: string;
+  cohereApiKey?: string;
+  deepSeekApiKey?: string;
+  geminiModelName?: string;
+  openAIModelName?: string;
+  anthropicModelName?: string;
+  groqModelName?: string;
+  cohereModelName?: string;
+  deepSeekModelName?: string;
+  embeddingProvider: EmbeddingProvider;
+  embeddingModelName?: string;
+  showProviderInStatusBar: boolean;
+  customAdvancedTemplates: AdvancedPromptTemplate[];
+  defaultAdvancedTemplates: Record<PlatformId, string | null>;
+}
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   ui: {
@@ -118,9 +188,26 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     anthropicEndpoint: 'https://api.anthropic.com',
     openAIApiKey: '',
     openAIEndpoint: 'https://api.openai.com/v1',
+    geminiApiKey: '',
+    geminiEndpoint: 'https://api.gemini.com',
+    deepseekApiKey: '',
+    deepseekEndpoint: 'https://api.deepseek.com',
     maxTokens: 2000,
     temperature: 0.7,
     defaultSystemPrompt: 'You are a helpful AI assistant.'
+  },
+  embedding: {
+    embeddingProvider: 'openai',
+    openai: {
+      model: 'text-embedding-ada-002',
+      apiKey: '',
+      endpoint: 'https://api.openai.com/v1'
+    },
+    gemini: {
+      model: 'gemini-embedding-exp-03-07',
+      apiKey: '',
+      endpoint: 'https://generativelanguage.googleapis.com'
+    },
   },
   shortcuts: {
     toggleChat: {
@@ -143,7 +230,10 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   rag: {
     topK: 8,
     threshold: 0.7,
-    dedupThreshold: 0.98
+    dedupThreshold: 0.98,
+    /** TOM-122: 默认白名单/黑名单配置 */
+    indexWhitelist: ['Golden-Knowledge/'],
+    indexBlacklist: ['Clippings/', '_resources/']
   },
   promptModule: {
     enabled: true,
@@ -176,7 +266,27 @@ export const DEFAULT_SETTINGS: PluginSettings = {
         colloquialErrors: false
       }
     }
-  }
+  },
+  showConversationsInRibbon: true,
+  defaultModel: 'gpt-3.5-turbo',
+  defaultTemperature: 0.7,
+  defaultMaxTokens: 2000,
+  promptTemplates: {},
+  currentConversationId: null,
+  conversations: [],
+  enableMemory: true,
+  maxMemoryTokens: 4000,
+  autoSaveConversations: true,
+  debugMode: false,
+  aiProvider: 'openai',
+  apiKey: '',
+  showProviderInStatusBar: true,
+  embeddingProvider: 'openai',
+  customAdvancedTemplates: [],
+  defaultAdvancedTemplates: ALL_DEFINED_PLATFORMS_FOR_DEFAULT.reduce((acc, platformId) => {
+    acc[platformId] = null;
+    return acc;
+  }, {} as Record<PlatformId, string | null>),
 };
 
 export const DEFAULT_PROMPT_TEMPLATES: PromptTemplate[] = [
@@ -224,3 +334,11 @@ export const DEFAULT_PROMPT_MODULE_SETTINGS: PromptModuleSettings = {
     }
   }
 };
+
+export const AI_PROVIDERS = [
+  'anthropic',
+  'openai',
+  'local',
+  'gemini',
+  'deepseek'
+];

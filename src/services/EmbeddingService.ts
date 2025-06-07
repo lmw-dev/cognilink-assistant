@@ -3,6 +3,10 @@ import CogniLinkPlugin from '../main';
 import { cosineDistance } from '../utils/math';
 import { ConfigurationError, APIError, NetworkError, AIService } from './AIService';
 import { Logger } from '../utils/logger';
+import { OpenAIProvider } from './OpenAIProvider';
+import { GeminiProvider } from './GeminiProvider';
+import { AIProvider } from './AIProvider';
+import type { EmbeddingProvider } from '../constants/ai-models';
 
 interface Note {
   title: string;
@@ -39,18 +43,68 @@ function splitContentByParagraph(content: string, maxLen: number): string[] {
   return chunks;
 }
 
+// 近似分词分片
+function splitContentByEstimatedTokens(content: string, maxTokens: number): string[] {
+  const words = content.match(/[\u4e00-\u9fa5]|[a-zA-Z0-9]+|[.,!?;:，。！？；：]/g) || [];
+  const chunks: string[] = [];
+  let buf: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    buf.push(words[i]);
+    if (buf.length >= maxTokens) {
+      chunks.push(buf.join(''));
+      buf = [];
+    }
+  }
+  if (buf.length > 0) chunks.push(buf.join(''));
+  return chunks;
+}
+
+// 工具函数：sleep
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export class EmbeddingService {
   private plugin: CogniLinkPlugin;
   private logger: Logger;
-  private aiService: AIService;
   private embeddings: Record<string, EmbeddingIndexItem> = {};
   private isLoaded = false;
+  private embeddingProvider: AIProvider;
 
   constructor(plugin: CogniLinkPlugin) {
     this.plugin = plugin;
     this.logger = new Logger('EmbeddingService');
-    this.aiService = new AIService(plugin);
+    this.embeddingProvider = this.createEmbeddingProvider();
     this.logger.info('EmbeddingService initialized');
+  }
+
+  private createEmbeddingProvider(): AIProvider {
+    const embedding = this.plugin.settings.embedding;
+    if (!embedding) {
+      throw new Error('Embedding 配置未找到');
+    }
+    const providerConfig = embedding[embedding.embeddingProvider];
+    if (!providerConfig) {
+      throw new Error(`Embedding 配置缺少 provider 字段: ${embedding.embeddingProvider}`);
+    }
+    if (embedding.embeddingProvider === 'openai') {
+      return new OpenAIProvider({
+        apiKey: providerConfig.apiKey,
+        endpoint: providerConfig.endpoint || 'https://api.openai.com/v1',
+        model: providerConfig.model || 'text-embedding-ada-002',
+        maxTokens: 1,
+        temperature: 0,
+      });
+    } else if (embedding.embeddingProvider === 'gemini') {
+      return new GeminiProvider({
+        apiKey: providerConfig.apiKey,
+        endpoint: providerConfig.endpoint || 'https://generativelanguage.googleapis.com',
+        model: providerConfig.model || 'gemini-embedding-exp-03-07',
+        maxTokens: 1,
+        temperature: 0,
+      });
+    }
+    throw new Error('不支持的 embedding provider: ' + embedding.embeddingProvider);
   }
 
   /**
@@ -99,31 +153,44 @@ export class EmbeddingService {
   /**
    * 更新指定笔记的嵌入，支持分片
    */
-  async updateEmbedding(note: Note): Promise<void> {
-    // 获取最大分片长度
-    const maxChunkLen = (this.plugin.settings as any).embeddingChunkLength || 4000;
-    if (note.content.length > maxChunkLen) {
-      const chunks = splitContentByParagraph(note.content, maxChunkLen);
-      this.logger.info(`分片处理: ${note.path} 共 ${chunks.length} 片，每片最大 ${maxChunkLen} 字`);
+  async updateEmbedding(note: Note, chunkPrefix = ''): Promise<void> {
+    // 获取最大分片 token 数，默认 2000，留余量防止超限
+    const maxChunkTokens = (this.plugin.settings as any).embeddingMaxTokens || 2000;
+    // 新增：获取 embedding 速率限制（ms），默认 1000ms
+    const rateLimitMs = (this.plugin.settings as any).embeddingRateLimitMs || 1000;
+    // 按近似 token 分片
+    const chunks = splitContentByEstimatedTokens(note.content, maxChunkTokens);
+    if (chunks.length > 1) {
+      this.logger.info(`分片处理: ${note.path} 共 ${chunks.length} 片，每片最大 ${maxChunkTokens} tokens(近似)`);
       for (let i = 0; i < chunks.length; i++) {
         const chunkContent = chunks[i];
+        const partKey = chunkPrefix ? `${chunkPrefix}-${i+1}` : `${i+1}`;
         try {
-          // 这里每片都用 AIService.generateEmbeddings（已递归防御超长）
-          const embedding = await this.aiService.generateEmbeddings(chunkContent);
-          this.embeddings[`${note.path}#part${i+1}`] = {
-            path: `${note.path}#part${i+1}`,
+          const embedding = await this.embeddingProvider.generateEmbeddings(chunkContent);
+          this.embeddings[`${note.path}#part${partKey}`] = {
+            path: `${note.path}#part${partKey}`,
             embedding,
             updated: Date.now(),
-            title: `${note.title} (分片${i+1})`,
+            title: `${note.title} (分片${partKey})`,
             tags: note.tags || [],
           };
-        } catch (e) {
-          this.logger.error(`分片 ${i+1} 生成 embedding 失败: ${note.path}`, e);
+          await sleep(rateLimitMs);
+        } catch (e: any) {
+          // 如果是 token 超限，自动递归拆分
+          if (e instanceof Error && String(e.message).includes('maximum context length')) {
+            if (chunkContent.length > 100) { // 防止死循环
+              this.logger.warn(`分片过大，自动递归拆分: ${note.path} 分片${partKey}`);
+              const subNote = { ...note, content: chunkContent, title: `${note.title} (递归分片)` };
+              await this.updateEmbedding(subNote, partKey);
+              continue;
+            }
+          }
+          this.logger.error(`分片 ${partKey} 生成 embedding 失败: ${note.path}`, e);
         }
       }
     } else {
       try {
-        const embedding = await this.aiService.generateEmbeddings(note.content);
+        const embedding = await this.embeddingProvider.generateEmbeddings(note.content);
         this.embeddings[note.path] = {
           path: note.path,
           embedding,
@@ -131,7 +198,19 @@ export class EmbeddingService {
           title: note.title,
           tags: note.tags || [],
         };
-      } catch (e) {
+      } catch (e: any) {
+        // 单片也兜底递归
+        if (e instanceof Error && String(e.message).includes('maximum context length')) {
+          if (note.content.length > 100) {
+            this.logger.warn(`单片过大，自动递归拆分: ${note.path}`);
+            const subChunks = splitContentByEstimatedTokens(note.content, Math.floor(maxChunkTokens / 2));
+            for (let j = 0; j < subChunks.length; j++) {
+              const subNote = { ...note, content: subChunks[j], title: `${note.title} (递归分片)` };
+              await this.updateEmbedding(subNote, `${chunkPrefix ? chunkPrefix + '-' : ''}${j+1}`);
+            }
+            return;
+          }
+        }
         this.logger.error(`单片生成 embedding 失败: ${note.path}`, e);
       }
     }
@@ -169,29 +248,29 @@ export class EmbeddingService {
   async findRelevantNotes(query: string, topK = 5, threshold = 0.75, minScore = 0.82): Promise<Note[]> {
     try {
       await this.loadEmbeddings();
-      
       this.logger.info(`[RAG] 开始检索，查询: "${query}"`);
-      
+      // === TOM-122: 获取白名单/黑名单配置 ===
+      const rag = this.plugin.settings.rag || {};
+      const whitelist: string[] = rag.indexWhitelist || [];
+      const blacklist: string[] = rag.indexBlacklist || [];
+      // 工具函数
+      const isInWhitelist = (path: string) => whitelist.length === 0 || whitelist.some(w => path.startsWith(w));
+      const isInBlacklist = (path: string) => blacklist.length > 0 && blacklist.some(b => path.startsWith(b));
       // 1. 首先尝试从现有缓存中进行语义检索
-      const cachedResults = await this.searchFromCache(query, topK, minScore);
-      
+      const cachedResults = await this.searchFromCache(query, topK, minScore, isInWhitelist, isInBlacklist);
       if (cachedResults.length > 0) {
         this.logger.info(`[RAG] 从缓存中找到 ${cachedResults.length} 个相关结果`);
         return cachedResults;
       }
-      
       // 2. 如果缓存中没有足够的结果，进行关键词检索并按需更新
       this.logger.info(`[RAG] 缓存结果不足，进行关键词检索和按需更新`);
-      const keywordResults = await this.searchByKeywordsAndUpdate(query, topK);
-      
+      const keywordResults = await this.searchByKeywordsAndUpdate(query, topK, isInWhitelist, isInBlacklist);
       if (keywordResults.length > 0) {
         return keywordResults;
       }
-      
       // 3. 最后的兜底策略：返回任何可用的缓存结果
       this.logger.info(`[RAG] 使用兜底策略，返回可用的缓存结果`);
-      return this.getFallbackResults(topK);
-      
+      return this.getFallbackResults(topK, isInWhitelist, isInBlacklist);
     } catch (err: any) {
       this.logger.error('[RAG] findRelevantNotes error:', err);
       return [];
@@ -199,55 +278,40 @@ export class EmbeddingService {
   }
 
   /**
-   * 从缓存中进行语义检索
+   * 从缓存中进行语义检索，支持白名单/黑名单过滤
    */
-  private async searchFromCache(query: string, topK: number, minScore: number): Promise<Note[]> {
-    const cachedPaths = Object.keys(this.embeddings);
+  private async searchFromCache(query: string, topK: number, minScore: number, isInWhitelist: (path: string) => boolean, isInBlacklist: (path: string) => boolean): Promise<Note[]> {
+    const cachedPaths = Object.keys(this.embeddings).filter(path => isInWhitelist(path) && !isInBlacklist(path));
     if (cachedPaths.length === 0) {
-      this.logger.info('[RAG] 缓存为空，跳过缓存检索');
+      this.logger.info('[RAG] 缓存为空或无匹配白名单，跳过缓存检索');
       return [];
     }
-    
     this.logger.info(`[RAG] 从 ${cachedPaths.length} 个缓存条目中检索`);
-    
-    // 获取 query 嵌入
-    const queryEmbedding = await this.aiService.generateEmbeddings(query);
-    
-    // 计算相似度
+    const queryEmbedding = await this.embeddingProvider.generateEmbeddings(query);
     const scores: Array<{path: string, score: number, item: EmbeddingIndexItem}> = [];
-    
     for (const path of cachedPaths) {
       const item = this.embeddings[path];
       if (!item.embedding) continue;
-      
       const score = 1 - cosineDistance(queryEmbedding, item.embedding);
       if (score >= minScore) {
         scores.push({ path, score, item });
       }
     }
-    
-    // 排序并取前 topK
     scores.sort((a, b) => b.score - a.score);
     const topResults = scores.slice(0, topK);
-    
     this.logger.info(`[RAG] 缓存检索找到 ${topResults.length} 个高分结果`);
-    
-    // 构建结果，只读取需要的文件内容
     const results: Note[] = [];
     for (const result of topResults) {
       try {
         const file = this.plugin.app.vault.getAbstractFileByPath(result.path) as TFile;
         if (file) {
-          // 检查文件是否需要更新
           if (result.item.updated < file.stat.mtime) {
             this.logger.info(`[RAG] 文件已更新，跳过: ${result.path}`);
             continue;
           }
-          
           const content = await this.plugin.app.vault.read(file);
           const meta = this.plugin.app.metadataCache.getFileCache(file);
           const tags = (meta?.tags ?? []).map(t => t.tag);
-          
           results.push({
             title: file.basename,
             content,
@@ -262,18 +326,15 @@ export class EmbeddingService {
         this.logger.error(`[RAG] 读取缓存结果文件失败: ${result.path}`, e);
       }
     }
-    
     return results;
   }
 
   /**
-   * 通过关键词检索并按需更新 embeddings
+   * 通过关键词检索并按需更新 embeddings，支持白名单/黑名单过滤
    */
-  private async searchByKeywordsAndUpdate(query: string, topK: number): Promise<Note[]> {
+  private async searchByKeywordsAndUpdate(query: string, topK: number, isInWhitelist: (path: string) => boolean, isInBlacklist: (path: string) => boolean): Promise<Note[]> {
     const vault = this.plugin.app.vault;
-    const allFiles = vault.getMarkdownFiles();
-    
-    // 关键词过滤
+    const allFiles = vault.getMarkdownFiles().filter(file => isInWhitelist(file.path) && !isInBlacklist(file.path));
     const keywords = query.split(/\s+|,|，|。|\.|;|；|:|：|\||\//).filter(Boolean);
     const candidateFiles = allFiles.filter(file => {
       return keywords.some(keyword => 
@@ -281,22 +342,16 @@ export class EmbeddingService {
         file.path.includes(keyword)
       );
     });
-    
     this.logger.info(`[RAG] 关键词检索找到 ${candidateFiles.length} 个候选文件`);
-    
     if (candidateFiles.length === 0) {
       return [];
     }
-    
-    // 限制处理数量，避免一次处理太多文件
     const filesToProcess = candidateFiles.slice(0, Math.min(20, candidateFiles.length));
     const results: Note[] = [];
-    
     for (const file of filesToProcess) {
       try {
         const cached = this.embeddings[file.path];
         let needsUpdate = false;
-        
         if (!cached) {
           needsUpdate = true;
           this.logger.info(`[RAG] 新文件需要生成 embedding: ${file.path}`);
@@ -304,13 +359,10 @@ export class EmbeddingService {
           needsUpdate = true;
           this.logger.info(`[RAG] 文件已更新，需要重新生成 embedding: ${file.path}`);
         }
-        
         if (needsUpdate) {
-          // 按需更新单个文件的 embedding
           const content = await vault.read(file);
           const meta = this.plugin.app.metadataCache.getFileCache(file);
           const tags = (meta?.tags ?? []).map(t => t.tag);
-          
           const note: Note = {
             title: file.basename,
             content,
@@ -319,15 +371,12 @@ export class EmbeddingService {
             tags,
             updated: file.stat.mtime,
           };
-          
           await this.updateEmbedding(note);
           results.push(note);
         } else {
-          // 使用缓存的 embedding
           const content = await vault.read(file);
           const meta = this.plugin.app.metadataCache.getFileCache(file);
           const tags = (meta?.tags ?? []).map(t => t.tag);
-          
           results.push({
             title: file.basename,
             content,
@@ -342,18 +391,16 @@ export class EmbeddingService {
         this.logger.error(`[RAG] 处理文件失败: ${file.path}`, e);
       }
     }
-    
     this.logger.info(`[RAG] 关键词检索处理完成，返回 ${results.length} 个结果`);
     return results.slice(0, topK);
   }
 
   /**
-   * 兜底策略：返回任何可用的缓存结果
+   * 兜底策略：返回任何可用的缓存结果，支持白名单/黑名单过滤
    */
-  private getFallbackResults(topK: number): Note[] {
-    const cachedPaths = Object.keys(this.embeddings).slice(0, topK);
+  private getFallbackResults(topK: number, isInWhitelist: (path: string) => boolean, isInBlacklist: (path: string) => boolean): Note[] {
+    const cachedPaths = Object.keys(this.embeddings).filter(path => isInWhitelist(path) && !isInBlacklist(path)).slice(0, topK);
     const results: Note[] = [];
-    
     for (const path of cachedPaths) {
       try {
         const file = this.plugin.app.vault.getAbstractFileByPath(path) as TFile;
@@ -373,7 +420,6 @@ export class EmbeddingService {
         // 忽略错误，继续处理下一个
       }
     }
-    
     this.logger.info(`[RAG] 兜底策略返回 ${results.length} 个结果`);
     return results;
   }
@@ -404,7 +450,7 @@ export class EmbeddingService {
    * 生成任意文本的 embedding
    */
   public async generateEmbeddingForText(text: string): Promise<number[]> {
-    return this.aiService.generateEmbeddings(text);
+    return this.embeddingProvider.generateEmbeddings(text);
   }
 
   /**

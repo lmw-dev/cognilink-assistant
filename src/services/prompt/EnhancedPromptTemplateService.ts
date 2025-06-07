@@ -727,7 +727,8 @@ export class EnhancedPromptTemplateService {
         blog: 0,
         toutiao: 0,
         zhihu: 0,
-        douyin: 0
+        douyin: 0,
+        linkedin: 0
       };
 
       // 按分类统计
@@ -901,16 +902,19 @@ export class EnhancedPromptTemplateService {
   private async loadTemplatesFromStorage(): Promise<void> {
     try {
       const settings = this.settingsManager.getSettings();
+      // 合并 customAdvancedTemplates 和 promptModuleSettings.templates
+      const customTemplates = (settings as any).customAdvancedTemplates || [];
       const promptSettings = (settings as any).promptModuleSettings;
-      const templatesData = promptSettings?.templates || [];
-      
+      const templatesData = [
+        ...(promptSettings?.templates || []),
+        ...customTemplates
+      ];
       for (const templateData of templatesData) {
         if (isAdvancedPromptTemplate(templateData)) {
           this.templates.set(templateData.id, templateData);
         }
       }
-
-      console.log(`[EnhancedPromptTemplateService] Loaded ${this.templates.size} templates from storage`);
+      console.log(`[EnhancedPromptTemplateService] Loaded ${this.templates.size} templates from storage (merged)`);
     } catch (error) {
       console.error('[EnhancedPromptTemplateService] Load from storage failed:', error);
     }

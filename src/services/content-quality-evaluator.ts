@@ -93,6 +93,7 @@ export class ContentQualityEvaluator {
     sourceNotes?: Note[],
     options?: QualityEvaluationOptions
   ): Promise<QualityEvaluationResult> {
+    console.log('【DEBUG】evaluateContent 参数:', { content, platform });
     const startTime = Date.now();
     const opts = { ...this.defaultOptions, ...options };
     const weights = { ...this.defaultWeights, ...opts.customWeights };

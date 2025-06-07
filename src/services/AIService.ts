@@ -8,6 +8,8 @@ import { AnthropicProvider, AnthropicProviderOptions } from './AnthropicProvider
 import { LocalProvider } from './LocalProvider';
 import { OpenAIProvider, OpenAIProviderOptions } from './OpenAIProvider';
 import { request } from 'obsidian';
+import { DeepSeekProvider, DeepSeekProviderOptions } from './DeepSeekProvider';
+import { GeminiProvider, GeminiProviderOptions } from './GeminiProvider';
 
 export class AIServiceError extends Error {
   constructor(message: string) {
@@ -66,8 +68,7 @@ export class AIService {
   }
 
   private createProvider(): AIProvider {
-    const { provider, model, anthropicApiKey, anthropicEndpoint, openAIApiKey, openAIEndpoint, maxTokens, temperature, defaultSystemPrompt } = this.settings.ai;
-    
+    const { provider, model, anthropicApiKey, anthropicEndpoint, openAIApiKey, openAIEndpoint, geminiApiKey, geminiEndpoint, deepseekApiKey, deepseekEndpoint, maxTokens, temperature, defaultSystemPrompt } = this.settings.ai;
     try {
       if (provider === 'anthropic') {
         if (!anthropicApiKey) {
@@ -99,6 +100,48 @@ export class AIService {
           systemPrompt: defaultSystemPrompt,
         };
         return new OpenAIProvider(options);
+      } else if (provider === 'deepseek') {
+        if (!deepseekApiKey) {
+          console.warn('[AIService] DeepSeek API key is missing, falling back to LocalProvider');
+          new Notice('DeepSeek API key 未配置，请在设置中添加');
+          return new LocalProvider();
+        }
+        const options: DeepSeekProviderOptions = {
+          apiKey: deepseekApiKey,
+          endpoint: deepseekEndpoint || 'https://api.deepseek.com',
+          model,
+          maxTokens,
+          temperature,
+          systemPrompt: defaultSystemPrompt,
+        };
+        try {
+          return new DeepSeekProvider(options);
+        } catch (e) {
+          console.error('[AIService] DeepSeekProvider 初始化失败，回退到 LocalProvider', e);
+          new Notice('DeepSeekProvider 初始化失败，已回退到本地模式');
+          return new LocalProvider();
+        }
+      } else if (provider === 'gemini') {
+        if (!geminiApiKey) {
+          console.warn('[AIService] Gemini API key is missing, falling back to LocalProvider');
+          new Notice('Gemini API key 未配置，请在设置中添加');
+          return new LocalProvider();
+        }
+        const options: GeminiProviderOptions = {
+          apiKey: geminiApiKey,
+          endpoint: geminiEndpoint || 'https://generativelanguage.googleapis.com',
+          model,
+          maxTokens,
+          temperature,
+          systemPrompt: defaultSystemPrompt,
+        };
+        try {
+          return new GeminiProvider(options);
+        } catch (e) {
+          console.error('[AIService] GeminiProvider 初始化失败，回退到 LocalProvider', e);
+          new Notice('GeminiProvider 初始化失败，已回退到本地模式');
+          return new LocalProvider();
+        }
       } else if (provider === 'local') {
         return new LocalProvider();
       } else {
@@ -107,6 +150,7 @@ export class AIService {
       }
     } catch (error) {
       console.error('[AIService] Error creating provider:', error);
+      new Notice('AI Provider 初始化失败，已回退到本地模式');
       return new LocalProvider(); // 异常情况也回退到本地提供商
     }
   }
@@ -114,11 +158,14 @@ export class AIService {
   async sendMessage(message: Message): Promise<Message> {
     try {
       const provider = this.createProvider();
-      
       // 集成 RAG 功能：检索相关文档并增强消息内容
       const enhancedMessage = await this.enhanceMessageWithRAG(message);
-      
-      return await provider.sendMessage(enhancedMessage);
+      this.logger.info('[AIService] sendMessage: 最终提交给大模型的 prompt 内容如下:');
+      this.logger.info(enhancedMessage.content);
+      const result = await provider.sendMessage(enhancedMessage);
+      this.logger.info('[AIService] sendMessage: 大模型返回内容如下:');
+      this.logger.info(result.content);
+      return result;
     } catch (err: any) {
       if (err instanceof ConfigurationError) {
         console.error('[AIService] 配置错误:', err);
@@ -152,7 +199,8 @@ export class AIService {
         return message;
       }
 
-      const query = message.content;
+      // 优化：只用 message.topic 作为检索主题，如果没有则 fallback 到 message.content
+      const query = (message as any).topic || message.content;
       this.logger.info(`[AIService] 开始 RAG 检索，查询: "${query}"`);
 
       // 使用 EmbeddingService 检索相关文档
@@ -175,21 +223,15 @@ export class AIService {
         const noteContent = note.content.length > 500 
           ? note.content.substring(0, 500) + '...' 
           : note.content;
-        
         contextParts.push(`【参考资料${index + 1}】来源：${note.title}\n${noteContent}`);
       });
 
       const context = contextParts.join('\n\n');
-      
-      // 构建增强的提示词
-      const enhancedContent = `请基于以下参考资料回答用户问题，如果参考资料中没有相关信息，请明确说明并基于你的知识回答。请在回答中标注信息来源。
+      // 优化：将 context 作为补充资料拼接到原有 prompt 后面
+      const enhancedContent = `${message.content}
 
-参考资料：
-${context}
-
-用户问题：${query}
-
-请提供详细、准确的回答，并在适当位置标注参考资料来源（如：根据【参考资料1】...）。`;
+【补充参考资料】
+${context}`;
 
       this.logger.info(`[AIService] RAG 增强完成，上下文长度: ${context.length} 字符`);
 
@@ -197,7 +239,6 @@ ${context}
         ...message,
         content: enhancedContent
       };
-
     } catch (error) {
       this.logger.error('[AIService] RAG 增强失败:', error);
       // RAG 失败时回退到原始消息

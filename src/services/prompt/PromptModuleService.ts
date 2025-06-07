@@ -446,6 +446,18 @@ export class PromptModuleService {
     limit: number = 10
   ): Promise<AdvancedPromptTemplate[]> {
     try {
+      // 优先查找默认模板
+      const settings = this.settingsManager.getSettings();
+      const defaultTemplates = (settings as any).defaultAdvancedTemplates || {};
+      const defaultId = defaultTemplates[platform];
+      if (defaultId) {
+        const defaultTemplate = await this.templateService.getTemplate(defaultId);
+        if (defaultTemplate) {
+          return [defaultTemplate];
+        }
+      }
+
+      // fallback: 原有逻辑
       const filters: TemplateFilters = { platform };
       if (category) {
         filters.category = category;
@@ -456,12 +468,10 @@ export class PromptModuleService {
       // 根据使用次数和质量评分排序
       const scored = templates.map(template => {
         let score = template.usageCount * 0.3; // 使用频率权重 30%
-        
         if (template.performanceMetrics) {
           score += template.performanceMetrics.platformFitScore * 0.4; // 平台适配 40%
           score += template.performanceMetrics.userSatisfaction * 0.3; // 用户满意度 30%
         }
-
         return { template, score };
       });
 

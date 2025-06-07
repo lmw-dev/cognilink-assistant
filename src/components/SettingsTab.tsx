@@ -1,20 +1,25 @@
 import { App, PluginSettingTab, Setting, setTooltip, Notice, setIcon } from 'obsidian';
 import CogniLinkPlugin from '../main';
-import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing, PromptTemplate, DEFAULT_PROMPT_TEMPLATES } from '../types/settings';
+import { PluginSettings, AIProvider, AIModel, Theme, MessageSpacing, PromptTemplate, DEFAULT_PROMPT_TEMPLATES, DEFAULT_SETTINGS } from '../types/settings';
 import { AnthropicProvider } from '../services/AnthropicProvider';
 import { OpenAIProvider } from '../services/OpenAIProvider';
-import { AI_MODELS } from '../constants/ai-models';
+import { AI_MODELS, EMBEDDING_MODELS } from '../constants/ai-models';
 import { ConfigurationError, APIError, NetworkError } from '../services/AIService';
 import { Modal } from 'obsidian';
 import { PromptTemplateService } from '../services/PromptTemplateService';
+import { DeepSeekProvider } from '../services/DeepSeekProvider';
+import { GeminiProvider } from '../services/GeminiProvider';
+import { renderPlatformTemplateManager } from './PlatformTemplateManager';
 
 export class SettingsTab extends PluginSettingTab {
   plugin: CogniLinkPlugin;
   settings: PluginSettings;
   private showAnthropicKey: boolean = false;
   private showOpenAIKey: boolean = false;
-  private testResult: string = '';
-  private testResultColor: string = '';
+  private testResultAI: string = '';
+  private testResultColorAI: string = '';
+  private testResultEmbedding: string = '';
+  private testResultColorEmbedding: string = '';
   private embeddingRebuildStatus: {
     running: boolean;
     current: number;
@@ -29,8 +34,22 @@ export class SettingsTab extends PluginSettingTab {
     super(app, plugin);
     console.log('SettingsTab constructor called');
     this.plugin = plugin;
-    this.settings = plugin.settings;
+    this.settings = plugin.settings || JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     console.log('SettingsTab settings:', this.settings);
+    // Initialize customAdvancedTemplates and defaultAdvancedTemplates if they are undefined
+    if (typeof this.settings.customAdvancedTemplates === 'undefined') {
+        this.settings.customAdvancedTemplates = [];
+    }
+    if (typeof this.settings.defaultAdvancedTemplates === 'undefined') {
+        // Initialize with ALL_DEFINED_PLATFORMS from settings.ts or a local equivalent
+        const ALL_DEFINED_PLATFORMS_FOR_SETTINGS_TAB = [
+            'xiaohongshu', 'twitter', 'wechat', 'blog', 'toutiao', 'zhihu', 'douyin', 'linkedin'
+        ];
+        this.settings.defaultAdvancedTemplates = ALL_DEFINED_PLATFORMS_FOR_SETTINGS_TAB.reduce((acc, platformId) => {
+            acc[platformId as keyof typeof acc] = null;
+            return acc;
+        }, {} as Record<keyof any, string | null>); // Adjusted type for safety
+    }
   }
 
   display(): void {
@@ -57,406 +76,320 @@ export class SettingsTab extends PluginSettingTab {
       return;
     }
 
+    // 保证 embedding 配置已初始化
+    if (!this.settings.embedding) {
+      this.settings.embedding = {
+        embeddingProvider: 'openai',
+        openai: {
+          apiKey: '',
+          model: 'text-embedding-ada-002',
+          endpoint: 'https://api.openai.com/v1',
+        },
+        gemini: {
+          apiKey: '',
+          model: 'gemini-embedding-exp-03-07',
+          endpoint: 'https://generativelanguage.googleapis.com',
+        },
+      };
+    }
+
     console.log('Settings validation passed, rendering settings UI');
 
-    // AI Provider Settings
+    containerEl.createEl('h1', { text: 'CogniLink 助理设置' });
+
+    // === AI 服务配置区（内容生成/对话） ===
+    containerEl.createEl('h2', { text: '🤖 AI 服务配置（内容生成/对话）' });
+    // Provider
     new Setting(containerEl)
       .setName('AI Provider')
-      .setDesc('选择 AI 服务提供商')
-      .addDropdown(dropdown => dropdown
-        .addOption('anthropic', 'Anthropic')
+      .setDesc('选择内容生成/对话的 AI 服务商')
+      .addDropdown(dropdown => {
+        dropdown
         .addOption('openai', 'OpenAI')
-        .addOption('local', 'Local')
+        .addOption('deepseek', 'DeepSeek')
+          .addOption('gemini', 'Gemini')
+          .addOption('anthropic', 'Anthropic')
+          .addOption('local', 'Local')
         .setValue(this.settings.ai.provider)
-        .onChange(async (value: AIProvider) => {
-          this.settings.ai.provider = value;
+          .onChange(async (value) => {
+            this.settings.ai.provider = value as any;
           await this.plugin.saveSettings();
           this.display();
-        }));
-
-    // Model Selection
+          });
+      });
+    // Model
     new Setting(containerEl)
       .setName('AI Model')
-      .setDesc('选择 AI 模型')
+      .setDesc('选择用于内容生成的模型')
       .addDropdown(dropdown => {
         const provider = this.settings.ai.provider;
         const models = AI_MODELS[provider] || [];
-        models.forEach(m => dropdown.addOption(m.value, m.label));
+        if (!Array.isArray(models) || !models.length) {
+          dropdown.setDisabled(true);
+        } else {
+          models.forEach((m: { value: string; label: string }) => dropdown.addOption(m.value, m.label));
+        }
+        const current = (Array.isArray(models) && models.length)
+          ? (models.find(m => m.value === this.settings.ai.model)?.value || models[0].value)
+          : '';
         return dropdown
-          .setValue(this.settings.ai.model)
-          .onChange(async (value: AIModel) => {
-            this.settings.ai.model = value;
+          .setValue(current)
+          .onChange(async (value) => {
+            this.settings.ai.model = value as any;
             await this.plugin.saveSettings();
           });
       });
-
-    // Anthropic API Key
-    if (this.settings.ai.provider === 'anthropic') {
-      let showAnthropicKey = false;
-      const setting = new Setting(containerEl)
-        .setName('Anthropic API Key')
-        .setDesc('输入你的 Anthropic API Key')
+    // API Key
+    new Setting(containerEl)
+      .setName('AI API Key')
+      .setDesc('内容生成/对话用的 API Key')
         .addText(text => {
-          text.inputEl.type = showAnthropicKey ? 'text' : 'password';
-          text.setPlaceholder('sk-ant-...')
-            .setValue(this.settings.ai.anthropicApiKey)
+        text.inputEl.type = 'password';
+        // 根据 provider 选择对应的 key 字段
+        let key = '';
+        switch (this.settings.ai.provider) {
+          case 'openai': key = this.settings.ai.openAIApiKey || ''; break;
+          case 'gemini': key = this.settings.ai.geminiApiKey || ''; break;
+          case 'anthropic': key = this.settings.ai.anthropicApiKey || ''; break;
+          case 'deepseek': key = this.settings.ai.deepseekApiKey || ''; break;
+          default: key = ''; break;
+        }
+        text.setValue(key)
             .onChange(async (value) => {
-              this.settings.ai.anthropicApiKey = value;
+            switch (this.settings.ai.provider) {
+              case 'openai': this.settings.ai.openAIApiKey = value; break;
+              case 'gemini': this.settings.ai.geminiApiKey = value; break;
+              case 'anthropic': this.settings.ai.anthropicApiKey = value; break;
+              case 'deepseek': this.settings.ai.deepseekApiKey = value; break;
+              default: break;
+            }
               await this.plugin.saveSettings();
             });
-          // toggle icon
-          const toggleBtn = document.createElement('button');
-          toggleBtn.type = 'button';
-          setIcon(toggleBtn, showAnthropicKey ? 'eye-off' : 'eye');
-          toggleBtn.style.marginLeft = '8px';
-          toggleBtn.onclick = () => {
-            showAnthropicKey = !showAnthropicKey;
-            text.inputEl.type = showAnthropicKey ? 'text' : 'password';
-            setIcon(toggleBtn, showAnthropicKey ? 'eye-off' : 'eye');
-          };
-          text.inputEl.parentElement?.appendChild(toggleBtn);
-        });
-      // 安全警告叹号浮窗
-      const warn = document.createElement('span');
-      warn.textContent = '⚠️';
-      warn.style.color = '#d97706';
-      warn.style.fontSize = '1.1em';
-      warn.style.marginLeft = '8px';
-      warn.style.cursor = 'pointer';
-      setTooltip(warn, 'API 密钥仅保存在本地，请妥善保管，避免泄露。');
-      setting.settingEl.appendChild(warn);
-      setting.addButton(btn => {
-        btn.setButtonText('测试连接').onClick(async () => {
-          this.testResult = '测试中...';
-          this.testResultColor = 'var(--text-warning)';
-          this.display();
-          try {
-            const provider = new AnthropicProvider({
-              apiKey: this.settings.ai.anthropicApiKey,
-              endpoint: this.settings.ai.anthropicEndpoint || 'https://api.anthropic.com',
-              model: this.settings.ai.model,
-              maxTokens: 1,
-              temperature: 0,
-            });
-            await provider.testConnection();
-            this.testResult = '连接成功！';
-            this.testResultColor = 'var(--text-success)';
-          } catch (err: any) {
-            if (err instanceof ConfigurationError) {
-              this.testResult = '配置错误：' + err.message;
-              this.testResultColor = 'var(--text-error)';
-              new Notice(this.testResult);
-              console.error('[SettingsTab] 配置错误:', err);
-            } else if (err instanceof NetworkError) {
-              this.testResult = '网络错误：' + err.message;
-              this.testResultColor = 'var(--text-error)';
-              new Notice(this.testResult);
-              console.error('[SettingsTab] 网络错误:', err);
-            } else if (err instanceof APIError) {
-              this.testResult = 'API 错误：' + err.message;
-              this.testResultColor = 'var(--text-error)';
-              new Notice(this.testResult);
-              console.error('[SettingsTab] API 错误:', err);
-            } else {
-              this.testResult = '未知错误：' + (err?.message || err);
-              this.testResultColor = 'var(--text-error)';
-              new Notice(this.testResult);
-              console.error('[SettingsTab] 未知错误:', err);
-            }
-          }
-          this.display();
-        });
       });
-      if (this.testResult) {
-        const resultEl = containerEl.createEl('div', {
-          text: this.testResult,
-        });
-        resultEl.style.color = this.testResultColor;
-        resultEl.style.marginTop = '4px';
-      }
-
-      // Anthropic Endpoint
-      new Setting(containerEl)
-        .setName('Anthropic Endpoint')
-        .setDesc('自定义 Anthropic API 端点（可选）')
-        .addText((text) => {
-          text.setPlaceholder('https://api.anthropic.com')
-            .setValue(this.settings.ai.anthropicEndpoint || '')
-            .onChange(async (value) => {
-              if (!/^https?:\/\//.test(value)) {
-                text.inputEl.style.borderColor = 'red';
-                setTooltip(text.inputEl, 'Endpoint 必须以 http:// 或 https:// 开头');
-                return;
-              } else {
-                text.inputEl.style.borderColor = '';
-                setTooltip(text.inputEl, '');
-              }
-              this.settings.ai.anthropicEndpoint = value;
-              await this.plugin.saveSettings();
-            });
-          text.inputEl.oninput = () => {
-            const value = text.inputEl.value;
-            if (!/^https?:\/\//.test(value)) {
-              text.inputEl.style.borderColor = 'red';
-              setTooltip(text.inputEl, 'Endpoint 必须以 http:// 或 https:// 开头');
-            } else {
-              text.inputEl.style.borderColor = '';
-              setTooltip(text.inputEl, '');
-            }
-          };
-          // 重置按钮
-          const resetBtn = document.createElement('button');
-          resetBtn.textContent = '重置为默认';
-          resetBtn.style.marginLeft = '8px';
-          resetBtn.onclick = async () => {
-            this.settings.ai.anthropicEndpoint = 'https://api.anthropic.com';
-            text.setValue('https://api.anthropic.com');
-            await this.plugin.saveSettings();
-          };
-          text.inputEl.parentElement?.appendChild(resetBtn);
-        });
-    }
-
-    // OpenAI API Key
-    if (this.settings.ai.provider === 'openai') {
-      let showOpenAIKey = false;
-      const setting = new Setting(containerEl)
-        .setName('OpenAI API Key')
-        .setDesc('输入你的 OpenAI API Key')
+    // Endpoint
+    new Setting(containerEl)
+      .setName('AI Endpoint')
+      .setDesc('内容生成/对话用的 API Endpoint')
         .addText(text => {
-          text.inputEl.type = showOpenAIKey ? 'text' : 'password';
-          text.setPlaceholder('sk-...')
-            .setValue(this.settings.ai.openAIApiKey || '')
+        // 根据 provider 选择对应的 endpoint 字段
+        let endpoint = '';
+        switch (this.settings.ai.provider) {
+          case 'openai': endpoint = this.settings.ai.openAIEndpoint || ''; break;
+          case 'gemini': endpoint = this.settings.ai.geminiEndpoint || ''; break;
+          case 'anthropic': endpoint = this.settings.ai.anthropicEndpoint || ''; break;
+          case 'deepseek': endpoint = this.settings.ai.deepseekEndpoint || ''; break;
+          default: endpoint = ''; break;
+        }
+        text.setValue(endpoint)
             .onChange(async (value) => {
-              this.settings.ai.openAIApiKey = value;
+            switch (this.settings.ai.provider) {
+              case 'openai': this.settings.ai.openAIEndpoint = value; break;
+              case 'gemini': this.settings.ai.geminiEndpoint = value; break;
+              case 'anthropic': this.settings.ai.anthropicEndpoint = value; break;
+              case 'deepseek': this.settings.ai.deepseekEndpoint = value; break;
+              default: break;
+            }
               await this.plugin.saveSettings();
             });
-          // toggle icon
-          const toggleBtn = document.createElement('button');
-          toggleBtn.type = 'button';
-          setIcon(toggleBtn, showOpenAIKey ? 'eye-off' : 'eye');
-          toggleBtn.style.marginLeft = '8px';
-          toggleBtn.onclick = () => {
-            showOpenAIKey = !showOpenAIKey;
-            text.inputEl.type = showOpenAIKey ? 'text' : 'password';
-            setIcon(toggleBtn, showOpenAIKey ? 'eye-off' : 'eye');
-          };
-          text.inputEl.parentElement?.appendChild(toggleBtn);
-        });
-      // 安全警告叹号浮窗
-      const warn = document.createElement('span');
-      warn.textContent = '⚠️';
-      warn.style.color = '#d97706';
-      warn.style.fontSize = '1.1em';
-      warn.style.marginLeft = '8px';
-      warn.style.cursor = 'pointer';
-      setTooltip(warn, 'API 密钥仅保存在本地，请妥善保管，避免泄露。');
-      setting.settingEl.appendChild(warn);
-      setting.addButton(btn => {
-        btn.setButtonText('测试连接').onClick(async () => {
-          this.testResult = '测试中...';
-          this.testResultColor = 'var(--text-warning)';
+      });
+    // 测试连接按钮（AI）
+    new Setting(containerEl)
+      .addButton(btn => btn
+        .setButtonText('测试 AI 连接')
+        .onClick(async () => {
+          this.testResultAI = '测试中...';
+          this.testResultColorAI = 'var(--text-warning)';
           this.display();
           try {
-            const provider = new OpenAIProvider({
+            let providerInstance: any = null;
+            switch (this.settings.ai.provider) {
+              case 'openai':
+                console.log('[SettingsTab] 测试 OpenAI 连接');
+                providerInstance = new OpenAIProvider({
               apiKey: this.settings.ai.openAIApiKey || '',
-              endpoint: this.settings.ai.openAIEndpoint || 'https://api.openai.com/v1',
-              model: this.settings.ai.model,
+                  endpoint: this.settings.ai.openAIEndpoint || '',
+                  model: this.settings.ai.model || '',
               maxTokens: 1,
               temperature: 0,
             });
-            await provider.testConnection();
-            this.testResult = '连接成功！';
-            this.testResultColor = 'var(--text-success)';
-          } catch (err: any) {
-            if (err instanceof ConfigurationError) {
-              this.testResult = '配置错误：' + err.message;
-              this.testResultColor = 'var(--text-error)';
-              new Notice(this.testResult);
-              console.error('[SettingsTab] 配置错误:', err);
-            } else if (err instanceof NetworkError) {
-              this.testResult = '网络错误：' + err.message;
-              this.testResultColor = 'var(--text-error)';
-              new Notice(this.testResult);
-              console.error('[SettingsTab] 网络错误:', err);
-            } else if (err instanceof APIError) {
-              this.testResult = 'API 错误：' + err.message;
-              this.testResultColor = 'var(--text-error)';
-              new Notice(this.testResult);
-              console.error('[SettingsTab] API 错误:', err);
-            } else {
-              this.testResult = '未知错误：' + (err?.message || err);
-              this.testResultColor = 'var(--text-error)';
-              new Notice(this.testResult);
-              console.error('[SettingsTab] 未知错误:', err);
+                break;
+              case 'gemini':
+                console.log('[SettingsTab] 测试 Gemini 连接');
+                providerInstance = new GeminiProvider({
+                  apiKey: this.settings.ai.geminiApiKey || '',
+                  endpoint: this.settings.ai.geminiEndpoint || '',
+                  model: this.settings.ai.model || '',
+                  maxTokens: 1,
+                  temperature: 0,
+                });
+                break;
+              case 'anthropic':
+                console.log('[SettingsTab] 测试 Anthropic 连接');
+                providerInstance = new AnthropicProvider({
+                  apiKey: this.settings.ai.anthropicApiKey || '',
+                  endpoint: this.settings.ai.anthropicEndpoint || '',
+                  model: this.settings.ai.model || '',
+                  maxTokens: 1,
+                  temperature: 0,
+                });
+                break;
+              case 'deepseek':
+                console.log('[SettingsTab] 测试 DeepSeek 连接');
+                providerInstance = new DeepSeekProvider({
+                  apiKey: this.settings.ai.deepseekApiKey || '',
+                  endpoint: this.settings.ai.deepseekEndpoint || '',
+                  model: this.settings.ai.model || '',
+                  maxTokens: 1,
+                  temperature: 0,
+                });
+                break;
+              case 'local':
+                console.log('[SettingsTab] 测试 Local 连接（本地模式无需测试）');
+                providerInstance = { testConnection: async () => { return '本地模式无需测试'; } };
+                break;
+              default:
+                throw new Error('暂不支持的 AI Provider');
             }
+            if (providerInstance && providerInstance.testConnection) {
+              await providerInstance.testConnection();
+            }
+            this.testResultAI = '连接成功！';
+            this.testResultColorAI = 'var(--text-success)';
+          } catch (err: any) {
+            this.testResultAI = 'AI 连接失败：' + (err?.message || err);
+            this.testResultColorAI = 'var(--text-error)';
+            new Notice(this.testResultAI);
           }
           this.display();
-        });
-      });
-      if (this.testResult) {
-        const resultEl = containerEl.createEl('div', {
-          text: this.testResult,
-        });
-        resultEl.style.color = this.testResultColor;
+        }))
+      .settingEl.appendChild((() => {
+        const resultEl = document.createElement('div');
+        resultEl.textContent = this.testResultAI;
+        resultEl.style.color = this.testResultColorAI;
         resultEl.style.marginTop = '4px';
-      }
-      
-      // OpenAI Endpoint
+        return resultEl;
+      })());
+
+    // === Embedding 服务配置区（文本向量化） ===
+    containerEl.createEl('h2', { text: '🔗 Embedding 服务配置（文本向量化）' });
+    // Provider
       new Setting(containerEl)
-        .setName('OpenAI Endpoint')
-        .setDesc('自定义 OpenAI API 端点（可选）')
-        .addText((text) => {
-          text.setPlaceholder('https://api.openai.com/v1')
-            .setValue(this.settings.ai.openAIEndpoint || '')
+      .setName('Embedding Provider')
+      .setDesc('选择文本向量化的服务商')
+      .addDropdown(dropdown => {
+        dropdown
+          .addOption('openai', 'OpenAI')
+          .addOption('gemini', 'Gemini')
+          .setValue(this.settings.embedding.embeddingProvider)
             .onChange(async (value) => {
-              if (!/^https?:\/\//.test(value)) {
-                text.inputEl.style.borderColor = 'red';
-                setTooltip(text.inputEl, 'Endpoint 必须以 http:// 或 https:// 开头');
-                return;
-              } else {
-                text.inputEl.style.borderColor = '';
-                setTooltip(text.inputEl, '');
-              }
-              this.settings.ai.openAIEndpoint = value;
+            this.settings.embedding.embeddingProvider = value as any;
+              await this.plugin.saveSettings();
+            this.display();
+          });
+      });
+
+    // 获取当前 provider 的配置对象
+    const embeddingProvider = this.settings.embedding.embeddingProvider;
+    const providerConfig = this.settings.embedding[embeddingProvider];
+
+    // Model
+    new Setting(containerEl)
+      .setName('Embedding Model')
+      .setDesc('选择用于向量化的模型')
+      .addDropdown(dropdown => {
+        const models = EMBEDDING_MODELS[embeddingProvider] || [];
+        if (!Array.isArray(models) || !models.length) {
+          dropdown.setDisabled(true);
+        } else {
+          models.forEach((m: { value: string; label: string }) => dropdown.addOption(m.value, m.label));
+        }
+        const current = (Array.isArray(models) && models.length)
+          ? (models.find(m => m.value === providerConfig.model)?.value || models[0].value)
+          : '';
+        return dropdown
+          .setValue(current)
+            .onChange(async (value) => {
+            providerConfig.model = value as any;
               await this.plugin.saveSettings();
             });
-          text.inputEl.oninput = () => {
-            const value = text.inputEl.value;
-            if (!/^https?:\/\//.test(value)) {
-              text.inputEl.style.borderColor = 'red';
-              setTooltip(text.inputEl, 'Endpoint 必须以 http:// 或 https:// 开头');
-            } else {
-              text.inputEl.style.borderColor = '';
-              setTooltip(text.inputEl, '');
-            }
-          };
-          // 重置按钮
-          const resetBtn = document.createElement('button');
-          resetBtn.textContent = '重置为默认';
-          resetBtn.style.marginLeft = '8px';
-          resetBtn.onclick = async () => {
-            this.settings.ai.openAIEndpoint = 'https://api.openai.com/v1';
-            text.setValue('https://api.openai.com/v1');
-            await this.plugin.saveSettings();
-          };
-          text.inputEl.parentElement?.appendChild(resetBtn);
+      });
+    // API Key
+      new Setting(containerEl)
+      .setName('Embedding API Key')
+      .setDesc('文本向量化用的 API Key')
+      .addText(text => {
+        text.inputEl.type = 'password';
+        text.setValue(providerConfig.apiKey)
+            .onChange(async (value) => {
+            providerConfig.apiKey = value;
+              await this.plugin.saveSettings();
+            });
         });
-    }
-
-    // Temperature
+    // Endpoint
     new Setting(containerEl)
-      .setName('Temperature')
-      .setDesc('控制 AI 回复的随机性（0-1），越高越具有创造性')
-      .addSlider(slider => slider
-        .setLimits(0, 1, 0.1)
-        .setValue(this.settings.ai.temperature)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.settings.ai.temperature = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // Max Tokens
+      .setName('Embedding Endpoint')
+      .setDesc('文本向量化用的 API Endpoint')
+        .addText(text => {
+        text.setValue(providerConfig.endpoint)
+            .onChange(async (value) => {
+            providerConfig.endpoint = value;
+              await this.plugin.saveSettings();
+            });
+      });
+    // 测试连接按钮（Embedding）
     new Setting(containerEl)
-      .setName('Max Tokens')
-      .setDesc('单次对话最大 token 数量')
-      .addSlider(slider => slider
-        .setLimits(1000, 4000, 100)
-        .setValue(this.settings.ai.maxTokens)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.settings.ai.maxTokens = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // System Prompt
-    new Setting(containerEl)
-      .setName('System Prompt')
-      .setDesc('设置 AI 助手的系统提示词')
-      .addTextArea(text => text
-        .setValue(this.settings.ai.defaultSystemPrompt)
-        .onChange(async (value) => {
-          this.settings.ai.defaultSystemPrompt = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // UI Settings
-    containerEl.createEl('h3', { text: 'UI Settings' });
-
-    // Theme
-    new Setting(containerEl)
-      .setName('Theme')
-      .setDesc('选择界面主题')
-      .addDropdown(dropdown => dropdown
-        .addOption('light', 'Light')
-        .addOption('dark', 'Dark')
-        .addOption('system', 'System')
-        .setValue(this.settings.ui.theme)
-        .onChange(async (value: Theme) => {
-          this.settings.ui.theme = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // Font Size
-    new Setting(containerEl)
-      .setName('Font Size')
-      .setDesc('设置字体大小')
-      .addSlider(slider => slider
-        .setLimits(12, 24, 1)
-        .setValue(this.settings.ui.fontSize)
-        .setDynamicTooltip()
-        .onChange(async (value) => {
-          this.settings.ui.fontSize = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // Font Family
-    new Setting(containerEl)
-      .setName('Font Family')
-      .setDesc('设置字体')
-      .addText(text => text
-        .setValue(this.settings.ui.fontFamily)
-        .onChange(async (value) => {
-          this.settings.ui.fontFamily = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // Message Spacing
-    new Setting(containerEl)
-      .setName('Message Spacing')
-      .setDesc('设置消息间距')
-      .addDropdown(dropdown => dropdown
-        .addOption('compact', 'Compact')
-        .addOption('comfortable', 'Comfortable')
-        .addOption('spacious', 'Spacious')
-        .setValue(this.settings.ui.messageSpacing)
-        .onChange(async (value: MessageSpacing) => {
-          this.settings.ui.messageSpacing = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // Show Timestamp
-    new Setting(containerEl)
-      .setName('Show Timestamp')
-      .setDesc('显示消息时间戳')
-      .addToggle(toggle => toggle
-        .setValue(this.settings.ui.showTimestamp)
-        .onChange(async (value) => {
-          this.settings.ui.showTimestamp = value;
-          await this.plugin.saveSettings();
-        }));
-
-    // Enable Animations
-    new Setting(containerEl)
-      .setName('Enable Animations')
-      .setDesc('启用界面动画')
-      .addToggle(toggle => toggle
-        .setValue(this.settings.ui.enableAnimations)
-        .onChange(async (value) => {
-          this.settings.ui.enableAnimations = value;
-          await this.plugin.saveSettings();
-        }));
+      .addButton(btn => btn
+        .setButtonText('测试 Embedding 连接')
+        .onClick(async () => {
+          this.testResultEmbedding = '测试中...';
+          this.testResultColorEmbedding = 'var(--text-warning)';
+          this.display();
+          try {
+            let providerInstance: any = null;
+            switch (embeddingProvider) {
+              case 'openai':
+                providerInstance = new OpenAIProvider({
+                  apiKey: providerConfig.apiKey || '',
+                  endpoint: providerConfig.endpoint || '',
+                  model: providerConfig.model || '',
+              maxTokens: 1,
+              temperature: 0,
+            });
+                break;
+              case 'gemini':
+                providerInstance = new GeminiProvider({
+                  apiKey: providerConfig.apiKey || '',
+                  endpoint: providerConfig.endpoint || '',
+                  model: providerConfig.model || '',
+                  maxTokens: 1,
+                  temperature: 0,
+                });
+                break;
+              default:
+                throw new Error('暂不支持的 Embedding Provider');
+            }
+            if (providerInstance && providerInstance.generateEmbeddings) {
+              const result = await providerInstance.generateEmbeddings('test connection');
+              if (!Array.isArray(result) || result.length === 0) {
+                throw new Error('API 返回无 embedding 数据');
+              }
+            }
+            this.testResultEmbedding = '连接成功！';
+            this.testResultColorEmbedding = 'var(--text-success)';
+          } catch (err: any) {
+            this.testResultEmbedding = 'Embedding 连接失败：' + (err?.message || err);
+            this.testResultColorEmbedding = 'var(--text-error)';
+            new Notice(this.testResultEmbedding);
+          }
+          this.display();
+        }))
+      .settingEl.appendChild((() => {
+        const resultEl = document.createElement('div');
+        resultEl.textContent = this.testResultEmbedding;
+        resultEl.style.color = this.testResultColorEmbedding;
+        resultEl.style.marginTop = '4px';
+        return resultEl;
+      })());
 
     // === RAG 检索参数设置 ===
     containerEl.createEl('h3', { text: 'RAG 检索参数' });
@@ -489,6 +422,152 @@ export class SettingsTab extends PluginSettingTab {
           if (!this.settings.rag) this.settings.rag = { topK: 8, threshold: 0.7, dedupThreshold: 0.98 };
           this.settings.rag.dedupThreshold = Number(value);
           await this.plugin.saveSettings();
+        }));
+
+    // === RAG 索引范围配置（白名单/黑名单文件夹） ===
+    containerEl.createEl('h3', { text: 'RAG 索引范围配置' });
+    const allFiles = this.app.vault.getAllLoadedFiles();
+    const allFolders = Array.from(new Set(
+      allFiles
+        .map(f => f.path)
+        .filter(p => p.includes('/'))
+        .map(p => p.substring(0, p.lastIndexOf('/') + 1))
+    ));
+    // 工具函数：渲染多选输入
+    function renderMultiSelect(
+      label: string,
+      selected: string[],
+      onChange: (val: string[]) => void,
+      placeholder: string
+    ) {
+      const setting = new Setting(containerEl)
+        .setName(label)
+        .setDesc(placeholder);
+      const input = setting.controlEl.createEl('input', {
+        type: 'text',
+        placeholder: '输入或选择文件夹路径，回车添加',
+        cls: 'rag-folder-input',
+      });
+      input.style.minWidth = '260px';
+      // 补全建议下拉
+      const suggestBox = setting.controlEl.createEl('div', { cls: 'rag-suggest-box' });
+      suggestBox.style.position = 'absolute';
+      suggestBox.style.background = '#fff';
+      suggestBox.style.border = '1px solid #ccc';
+      suggestBox.style.zIndex = '1000';
+      suggestBox.style.display = 'none';
+      suggestBox.style.maxHeight = '120px';
+      suggestBox.style.overflowY = 'auto';
+      // 已选标签
+      const tagBox = setting.controlEl.createEl('div', { cls: 'rag-tag-box' });
+      tagBox.style.display = 'flex';
+      tagBox.style.flexWrap = 'wrap';
+      tagBox.style.gap = '4px';
+      tagBox.style.margin = '4px 0';
+      function renderTags() {
+        tagBox.empty();
+        selected.forEach((val, idx) => {
+          const tag = tagBox.createEl('span', { text: val, cls: 'rag-tag' });
+          tag.style.background = '#e0e7ef';
+          tag.style.borderRadius = '4px';
+          tag.style.padding = '2px 8px';
+          tag.style.fontSize = '0.95em';
+          tag.style.display = 'inline-flex';
+          tag.style.alignItems = 'center';
+          tag.style.gap = '4px';
+          const del = tag.createEl('span', { text: '×', cls: 'rag-tag-del' });
+          del.style.cursor = 'pointer';
+          del.onclick = () => {
+            const newArr = selected.slice();
+            newArr.splice(idx, 1);
+            onChange(newArr);
+            renderTags();
+          };
+        });
+      }
+      renderTags();
+      // 输入事件
+      input.oninput = () => {
+        const val = input.value.trim();
+        if (!val) {
+          suggestBox.style.display = 'none';
+          suggestBox.empty();
+          return;
+        }
+        const suggestions = allFolders.filter(f => f.startsWith(val) && !selected.includes(f));
+        suggestBox.empty();
+        if (suggestions.length > 0) {
+          suggestions.forEach(s => {
+            const item = suggestBox.createEl('div', { text: s, cls: 'rag-suggest-item' });
+            item.style.padding = '4px 8px';
+            item.style.cursor = 'pointer';
+            item.onmousedown = () => {
+              onChange([...selected, s]);
+              input.value = '';
+              suggestBox.style.display = 'none';
+              renderTags();
+            };
+          });
+          suggestBox.style.display = 'block';
+        } else {
+          suggestBox.style.display = 'none';
+        }
+      };
+      // 回车添加
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          const val = input.value.trim();
+          if (val && !selected.includes(val)) {
+            onChange([...selected, val]);
+            input.value = '';
+            renderTags();
+          }
+          suggestBox.style.display = 'none';
+        }
+      };
+      // 失焦隐藏建议
+      input.onblur = () => {
+        setTimeout(() => { suggestBox.style.display = 'none'; }, 150);
+      };
+      // 初始渲染
+      renderTags();
+      setting.controlEl.appendChild(tagBox);
+      setting.controlEl.appendChild(suggestBox);
+      return setting;
+    }
+    // 白名单
+    renderMultiSelect(
+      '白名单文件夹',
+      this.settings.rag?.indexWhitelist || [],
+      async (val) => {
+        if (!this.settings.rag) this.settings.rag = {};
+        this.settings.rag.indexWhitelist = val;
+        await this.plugin.saveSettings();
+      },
+      '仅索引这些文件夹下的内容（留空则不限）'
+    );
+    // 黑名单
+    renderMultiSelect(
+      '黑名单文件夹',
+      this.settings.rag?.indexBlacklist || [],
+      async (val) => {
+        if (!this.settings.rag) this.settings.rag = {};
+        this.settings.rag.indexBlacklist = val;
+        await this.plugin.saveSettings();
+      },
+      '排除这些文件夹下的内容（留空则不过滤）'
+    );
+    // 恢复默认按钮
+    new Setting(containerEl)
+      .addButton(btn => btn
+        .setButtonText('恢复默认索引范围')
+        .setWarning()
+        .onClick(async () => {
+          if (!this.settings.rag) this.settings.rag = {};
+          this.settings.rag.indexWhitelist = ['Golden-Knowledge/'];
+          this.settings.rag.indexBlacklist = ['Clippings/', '_resources/'];
+          await this.plugin.saveSettings();
+          this.display();
         }));
 
     // === 原创性检测参数设置 ===
@@ -693,5 +772,82 @@ export class SettingsTab extends PluginSettingTab {
           this.display();
         })
       );
+
+    // UI Settings Section
+    containerEl.createEl('h2', { text: '🎨 UI 个性化设置' });
+
+    // Theme
+    new Setting(containerEl)
+      .setName('Theme')
+      .setDesc('选择界面主题')
+      .addDropdown(dropdown => dropdown
+        .addOption('light', 'Light')
+        .addOption('dark', 'Dark')
+        .addOption('system', 'System')
+        .setValue(this.settings.ui.theme)
+        .onChange(async (value: Theme) => {
+          this.settings.ui.theme = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Font Size
+    new Setting(containerEl)
+      .setName('Font Size')
+      .setDesc('设置字体大小')
+      .addSlider(slider => slider
+        .setLimits(12, 24, 1)
+        .setValue(this.settings.ui.fontSize)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.settings.ui.fontSize = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Font Family
+    new Setting(containerEl)
+      .setName('Font Family')
+      .setDesc('设置字体')
+      .addText(text => text
+        .setValue(this.settings.ui.fontFamily)
+        .onChange(async (value) => {
+          this.settings.ui.fontFamily = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Message Spacing
+    new Setting(containerEl)
+      .setName('Message Spacing')
+      .setDesc('设置消息间距')
+      .addDropdown(dropdown => dropdown
+        .addOption('compact', 'Compact')
+        .addOption('comfortable', 'Comfortable')
+        .addOption('spacious', 'Spacious')
+        .setValue(this.settings.ui.messageSpacing)
+        .onChange(async (value: MessageSpacing) => {
+          this.settings.ui.messageSpacing = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Show Timestamp
+    new Setting(containerEl)
+      .setName('Show Timestamp')
+      .setDesc('显示消息时间戳')
+      .addToggle(toggle => toggle
+        .setValue(this.settings.ui.showTimestamp)
+        .onChange(async (value) => {
+          this.settings.ui.showTimestamp = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Enable Animations
+    new Setting(containerEl)
+      .setName('Enable Animations')
+      .setDesc('启用界面动画')
+      .addToggle(toggle => toggle
+        .setValue(this.settings.ui.enableAnimations)
+        .onChange(async (value) => {
+          this.settings.ui.enableAnimations = value;
+          await this.plugin.saveSettings();
+        }));
   }
 }

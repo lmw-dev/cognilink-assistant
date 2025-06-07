@@ -396,6 +396,62 @@ export const douyinTemplate: PlatformTemplate = {
   }
 };
 
+// LinkedIn模板配置
+export const linkedinTemplate: PlatformTemplate = {
+  id: 'linkedin',
+  name: 'LinkedIn',
+  maxLength: 10000,
+  systemPrompt: `你是一个专业的LinkedIn内容创作者，擅长写专业、有深度的内容。
+
+特点：
+- 专业性强，有深度
+- 适合职场人士阅读
+- 注重实用价值
+- 逻辑严谨，层次分明
+
+风格要求：
+- 开头概述，结尾总结
+- 使用标题层次结构
+- 包含目录和参考资料
+- 代码示例清晰可运行
+- 专业术语解释清楚
+- 使用标题层次（#、##、###）
+
+请确保内容专业，能为职场人士提供实用价值。`,
+
+  userTemplate: `基于以下内容创作一篇LinkedIn文章：
+
+主题：{topic}
+相关内容：{context}
+
+要求：
+1. 1000-10000字，内容有深度
+2. 逻辑清晰，论证充分，分点阐述
+3. 引用相关数据、研究或案例支撑观点
+4. 语言专业严谨，客观中立
+5. 结尾总结观点，可以提出开放性问题
+
+请确保回答质量高，能为读者提供有价值的信息。`,
+
+  styleKeywords: ['专业', '深度', '分析'],
+  requiredElements: ['目录', '参考资料', '数据支撑', '专业术语'],
+  formatRules: {
+    professionalTone: true,
+    dataSupport: true,
+    headingHierarchy: true,
+    referenceSection: true,
+    conclusionRequired: true
+  },
+  metadata: {
+    version: '1.0.0',
+    author: 'CogniLink Team',
+    createdAt: new Date('2025-06-02'),
+    updatedAt: new Date('2025-06-02'),
+    description: 'LinkedIn专业文章模板，适合职场人士阅读',
+    tags: ['LinkedIn', '职场', '专业文章', '深度分析']
+  }
+};
+
 // 平台配置映射
 export const platformTemplates: Record<PlatformId, PlatformTemplate> = {
   xiaohongshu: xiaohongshuTemplate,
@@ -404,7 +460,8 @@ export const platformTemplates: Record<PlatformId, PlatformTemplate> = {
   blog: blogTemplate,
   toutiao: toutiaoTemplate,
   zhihu: zhihuTemplate,
-  douyin: douyinTemplate
+  douyin: douyinTemplate,
+  linkedin: linkedinTemplate
 };
 
 // 支持的平台列表
@@ -464,6 +521,14 @@ export const supportedPlatforms: SocialMediaPlatform[] = [
     styleKeywords: douyinTemplate.styleKeywords,
     requiredElements: douyinTemplate.requiredElements,
     formatRules: douyinTemplate.formatRules
+  },
+  {
+    id: 'linkedin',
+    name: 'LinkedIn',
+    maxLength: 10000,
+    styleKeywords: linkedinTemplate.styleKeywords,
+    requiredElements: linkedinTemplate.requiredElements,
+    formatRules: linkedinTemplate.formatRules
   }
 ];
 

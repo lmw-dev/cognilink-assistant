@@ -78,6 +78,21 @@ export default class CogniLinkPlugin extends Plugin {
       await this.settingsManager.loadSettings();
       this.settings = this.settingsManager.getSettings();
       console.log('[main] settings loaded:', this.settings);
+      // --- embedding 配置结构补全 ---
+      if (!this.settings.embedding || typeof this.settings.embedding !== 'object') {
+        this.settings.embedding = {
+          embeddingProvider: 'openai',
+          openai: { apiKey: '', model: 'text-embedding-ada-002', endpoint: 'https://api.openai.com/v1' },
+          gemini: { apiKey: '', model: 'gemini-embedding-exp-03-07', endpoint: 'https://generativelanguage.googleapis.com' }
+        };
+      } else {
+        if (!this.settings.embedding.openai) {
+          this.settings.embedding.openai = { apiKey: '', model: 'text-embedding-ada-002', endpoint: 'https://api.openai.com/v1' };
+        }
+        if (!this.settings.embedding.gemini) {
+          this.settings.embedding.gemini = { apiKey: '', model: 'gemini-embedding-exp-03-07', endpoint: 'https://generativelanguage.googleapis.com' };
+        }
+      }
       
       // 初始化核心服务
       console.log('[main] initializing EmbeddingService');
@@ -147,13 +162,18 @@ export default class CogniLinkPlugin extends Plugin {
       
       // 注册视图和命令
       addIcon('cognilink-chat', CHAT_ICON);
-      this.registerView(
-        VIEW_TYPE_CHAT,
-        (leaf) => {
-          console.log('Creating new ChatView');
-          return new ChatView(leaf, this);
-        }
-      );
+      this.app.workspace.detachLeavesOfType(VIEW_TYPE_CHAT);
+      try {
+        this.registerView(
+          VIEW_TYPE_CHAT,
+          (leaf) => {
+            console.log('Creating new ChatView');
+            return new ChatView(leaf, this);
+          }
+        );
+      } catch (e) {
+        console.warn('View type cognilink-chat 已注册，跳过重复注册');
+      }
 
       // Register Smart Assistant View
       this.registerView(
@@ -324,6 +344,8 @@ export default class CogniLinkPlugin extends Plugin {
     if (this.accessibilityManager) {
       this.accessibilityManager.cleanup();
     }
+    // Detach Chat view and Smart Assistant view
+    this.app.workspace.detachLeavesOfType(VIEW_TYPE_CHAT);
     // Detach Smart Assistant view if open
     this.app.workspace.detachLeavesOfType(SMART_ASSISTANT_VIEW_TYPE);
     new Notice('CogniLink 插件已卸载');

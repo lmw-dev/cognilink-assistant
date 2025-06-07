@@ -69,7 +69,7 @@ export class OpenAIProvider implements AIProvider {
     }
   }
 
-  async generateEmbeddings(text: string): Promise<number[]> {
+  async generateEmbeddings(text: string, maxRetries = 6): Promise<number[]> {
     const { apiKey, endpoint } = this.options;
     const url = `${endpoint}/embeddings`;
     const headers = {
@@ -80,40 +80,69 @@ export class OpenAIProvider implements AIProvider {
       model: 'text-embedding-ada-002',
       input: text,
     };
-    console.log('[OpenAIProvider][generateEmbeddings] url:', url);
-    console.log('[OpenAIProvider][generateEmbeddings] headers:', headers);
-    console.log('[OpenAIProvider][generateEmbeddings] body:', body);
-    try {
-      const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new APIError('OpenAI Embedding API 超时（30秒）')), 30000));
-      const response = await Promise.race([
-        requestUrl({
-          url,
-          method: 'POST',
-          headers,
-          body: JSON.stringify(body),
-          throw: false,
-        }),
-        timeoutPromise
-      ]);
-      if (response.status !== 200) {
-        this.logger.error('OpenAI Embedding API error:', new Error(`${response.status} ${response.text}`));
-        throw new APIError(`OpenAI Embedding API error: ${response.status} ${response.text}`);
+    let attempt = 0;
+    let delay = 1000; // 初始等待1秒
+    while (attempt < maxRetries) {
+      try {
+        console.log(`[OpenAIProvider][generateEmbeddings] attempt ${attempt + 1}, url:`, url);
+        const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new APIError('OpenAI Embedding API 超时（30秒）')), 30000));
+        const response = await Promise.race([
+          requestUrl({
+            url,
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+            throw: false,
+          }),
+          timeoutPromise
+        ]);
+        if (response.status === 429) {
+          // 限流，动态获取建议等待时间
+          let wait = delay;
+          try {
+            const data = response.json;
+            const msg = data?.error?.message || '';
+            const match = msg.match(/Please try again in (\\d+)ms/);
+            if (match) {
+              wait = Math.max(parseInt(match[1], 10), delay);
+            }
+            console.warn(`[OpenAIProvider] 429限流，等待${wait}ms后重试...`, msg);
+          } catch (e) { /* 忽略解析失败 */ }
+          await new Promise(res => setTimeout(res, wait));
+          delay = Math.min(delay * 2, 10000); // 指数退避，最大10秒
+          attempt++;
+          continue;
+        }
+        if (response.status !== 200) {
+          this.logger.error('OpenAI Embedding API error:', new Error(`${response.status} ${response.text}`));
+          throw new APIError(`OpenAI Embedding API error: ${response.status} ${response.text}`);
+        }
+        const data = response.json;
+        const embedding = data.data?.[0]?.embedding;
+        if (Array.isArray(embedding)) {
+          // 正常请求后 sleep 1s，避免触发限流
+          await new Promise(res => setTimeout(res, 1000));
+          return embedding;
+        }
+        this.logger.error('OpenAI Embedding API: No embedding returned', new Error(JSON.stringify(data)));
+        throw new APIError('OpenAI Embedding API: No embedding returned');
+      } catch (err: any) {
+        this.logger.error('generateEmbeddings error:', err instanceof Error ? err : new Error(String(err)));
+        if (err instanceof APIError && String(err.message).includes('429')) {
+          // 429错误已在上面处理，这里只做重试
+          attempt++;
+          delay = Math.min(delay * 2, 10000);
+          await new Promise(res => setTimeout(res, delay));
+          continue;
+        }
+        if (err instanceof APIError) throw err;
+        if (err.message && err.message.includes('network')) {
+          throw new NetworkError(`OpenAI 网络错误: ${err.message}`);
+        }
+        throw new APIError(`OpenAI Embedding API 调用失败: ${err.message || err}`);
       }
-      const data = response.json;
-      const embedding = data.data?.[0]?.embedding;
-      if (Array.isArray(embedding)) {
-        return embedding;
-      }
-      this.logger.error('OpenAI Embedding API: No embedding returned', new Error(JSON.stringify(data)));
-      throw new APIError('OpenAI Embedding API: No embedding returned');
-    } catch (err: any) {
-      this.logger.error('generateEmbeddings error:', err instanceof Error ? err : new Error(String(err)));
-      if (err instanceof APIError) throw err;
-      if (err.message && err.message.includes('network')) {
-        throw new NetworkError(`OpenAI 网络错误: ${err.message}`);
-      }
-      throw new APIError(`OpenAI Embedding API 调用失败: ${err.message || err}`);
     }
+    throw new APIError('OpenAI Embedding API 多次重试后仍然失败');
   }
 
   async testConnection(): Promise<boolean> {
@@ -130,9 +159,7 @@ export class OpenAIProvider implements AIProvider {
       console.log('[OpenAIProvider][testConnection] response.text:', response.text);
       try {
         console.log('[OpenAIProvider][testConnection] response.json:', response.json);
-      } catch (e) {
-        // response 不是 json 时忽略
-      }
+      } catch (e) { /* 忽略解析失败 */ }
       if (response.status === 200) return true;
       throw new APIError(`连接失败: ${response.status} ${response.text}`);
     } catch (err: any) {

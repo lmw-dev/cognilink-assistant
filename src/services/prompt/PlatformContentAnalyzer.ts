@@ -89,6 +89,13 @@ export class PlatformContentAnalyzer {
       hashtagUsage: 0.25,
       interactivity: 0.15,
       personalStyle: 0.1
+    },
+    'linkedin': {
+      contentLength: 0.4,
+      emojiUsage: 0.05,
+      hashtagUsage: 0.2,
+      interactivity: 0.15,
+      personalStyle: 0.2
     }
   };
 
@@ -152,7 +159,8 @@ export class PlatformContentAnalyzer {
     blog: [],
     toutiao: [],
     zhihu: [],
-    douyin: []
+    douyin: [],
+    linkedin: [] // 补全 linkedin，暂时无规则
     // Add more platforms and rules as needed
   };
 
@@ -221,7 +229,9 @@ export class PlatformContentAnalyzer {
 
       if (!templates || templates.length === 0) {
         console.warn(`No specific template found for platform ${platform.id} and category 'social-media-post'. Using base prompt.`);
-        return basePrompt;
+        // === 新增：拼接平台风格指令 ===
+        const styleInstructions = getPlatformStyleInstructions(platform);
+        return styleInstructions ? `${basePrompt}\n${styleInstructions}` : basePrompt;
       }
       
       const template = templates[0]; // Use the first matching template
@@ -242,6 +252,12 @@ export class PlatformContentAnalyzer {
       }
       if (template.outputPrompt) {
         fullSpecificPrompt += `Output Instructions: ${template.outputPrompt}`;
+      }
+      
+      // === 新增：拼接平台风格指令 ===
+      const styleInstructions = getPlatformStyleInstructions(platform);
+      if (styleInstructions) {
+        fullSpecificPrompt += `\n\n风格要求: ${styleInstructions}`;
       }
       
       return fullSpecificPrompt.trim();
@@ -278,6 +294,20 @@ export class PlatformContentAnalyzer {
     }
     if (changes.length > 0) {
         optimizationSummary += ` Key suggestions include: ${changes.slice(0, 2).map(c => c.description).join(', ')}`;
+    }
+
+    // === 新增：风格分析与建议 ===
+    const styleInstructions = getPlatformStyleInstructions(platform);
+    if (styleInstructions && !content.includes('新闻报道风格')) {
+      // 检查内容是否已具备风格特征，否则在优化建议中补充
+      changes.unshift({
+        type: 'style',
+        description: '建议采用新闻报道风格：' + styleInstructions,
+        originalExcerpt: '',
+        optimizedExcerpt: '',
+        impactScore: 20,
+        reason: '内容风格需更贴合平台高质量新闻/科普要求'
+      });
     }
 
     return {
@@ -1424,35 +1454,35 @@ export class PlatformContentAnalyzer {
         frequency: 85,
         impact: 90,
         examples: ['快速教程', '产品展示', '生活Vlog片段'],
-        platformSuitability: { xiaohongshu: 80, twitter: 60, wechat: 50, blog: 30, toutiao: 70, zhihu: 40, douyin: 95 }
+        platformSuitability: { xiaohongshu: 80, twitter: 60, wechat: 50, blog: 30, toutiao: 70, zhihu: 40, douyin: 95, linkedin: 40 }
       },
       {
         trend: '互动性内容 (问答、投票)',
         frequency: 70,
         impact: 80,
         examples: ['提问引导讨论', '发起投票', '评论区互动'],
-        platformSuitability: { xiaohongshu: 85, twitter: 90, wechat: 70, blog: 60, toutiao: 75, zhihu: 80, douyin: 70 }
+        platformSuitability: { xiaohongshu: 85, twitter: 90, wechat: 70, blog: 60, toutiao: 75, zhihu: 80, douyin: 70, linkedin: 60 }
       },
       {
         trend: '教程与指南型内容',
         frequency: 60,
         impact: 85,
         examples: ['How-to指南', '技巧分享', '步骤拆解'],
-        platformSuitability: { xiaohongshu: 75, twitter: 50, wechat: 80, blog: 90, toutiao: 65, zhihu: 90, douyin: 60 }
+        platformSuitability: { xiaohongshu: 75, twitter: 50, wechat: 80, blog: 90, toutiao: 65, zhihu: 90, douyin: 60, linkedin: 80 }
       },
       {
         trend: '真实体验与评测',
         frequency: 75,
         impact: 88,
         examples: ['产品使用心得', '服务体验分享', '优缺点分析'],
-        platformSuitability: { xiaohongshu: 90, twitter: 65, wechat: 70, blog: 70, toutiao: 70, zhihu: 80, douyin: 75 }
+        platformSuitability: { xiaohongshu: 90, twitter: 65, wechat: 70, blog: 70, toutiao: 70, zhihu: 80, douyin: 75, linkedin: 70 }
       },
       {
         trend: '热点话题与新闻评论',
         frequency: 80,
         impact: 75,
         examples: ['对当前事件的看法', '新闻解读', '趋势分析'],
-        platformSuitability: { xiaohongshu: 50, twitter: 90, wechat: 85, blog: 70, toutiao: 90, zhihu: 85, douyin: 60 }
+        platformSuitability: { xiaohongshu: 50, twitter: 90, wechat: 85, blog: 70, toutiao: 90, zhihu: 85, douyin: 60, linkedin: 85 }
       }
     ];
 
@@ -1521,7 +1551,8 @@ export class PlatformContentAnalyzer {
       'blog': ['SEO友好的长尾关键词标题', '详细的技术步骤或分析论证', '代码块或示例（如果适用）', '高质量图片或图表', '内外链建设', '评论区互动'],
       'toutiao': ['极具吸引力的"标题党"式标题', '热门关键词堆砌', '多张配图或短视频', '分段短小，降低阅读门槛', '争议性或共鸣性话题引入', '强引导性结尾（点赞、评论、转发）'],
       'zhihu': ['针对问题的直接回答', '清晰的逻辑和论证过程', '引用权威数据或个人专业经验', '多角度分析问题', '配图解释复杂概念', '友善且专业的讨论姿态'],
-      'douyin': ['抓人眼球的黄金3秒开头', '热门背景音乐和特效', '清晰的口播或字幕', '与内容匹配的场景和道具', '强互动的挑战或引导语', '高频更新和系列内容']
+      'douyin': ['抓人眼球的黄金3秒开头', '热门背景音乐和特效', '清晰的口播或字幕', '与内容匹配的场景和道具', '强互动的挑战或引导语', '高频更新和系列内容'],
+      'linkedin': ['专业的个人成就描述', '行业相关的见解分享', '适度使用标签', '鼓励互动和推荐', '清晰的职业经历', '高质量头像和封面']
     };
 
     let recommended = baseElements[platformId] || baseElements['xiaohongshu'];
@@ -1543,7 +1574,8 @@ export class PlatformContentAnalyzer {
       'blog': ['缺乏深度和原创性的转载内容', '排版混乱，代码无高亮', '过多的广告和弹窗', '观点模糊，论证不足'],
       'toutiao': ['过于平淡的标题和内容', '不符合平台用户阅读习惯的深度长文', '缺乏图片或视频', '内容空洞，纯粹博眼球'],
       'zhihu': ['与问题无关的回答', '缺乏论证的纯观点输出', '抖机灵或玩梗（除非问题本身是娱乐向）', '不友善的讨论态度', '大量营销广告'],
-      'douyin': ['节奏缓慢，开头平淡的视频', '画质模糊，音效差', '无字幕或口播听不清', '纯粹搬运，无二次创作', '违规或低俗内容']
+      'douyin': ['节奏缓慢，开头平淡的视频', '画质模糊，音效差', '无字幕或口播听不清', '纯粹搬运，无二次创作', '违规或低俗内容'],
+      'linkedin': ['过度自夸', '虚假经历', '与职业无关的内容', '低质量图片', '无关标签', '负面评论']
     };
     let avoided = baseAvoided[platformId] || [];
      if (category.toLowerCase().includes('科普') && platformId === 'douyin') {
@@ -1977,3 +2009,11 @@ export class PlatformContentAnalyzer {
     return score;
   }
 } 
+
+// === 新增：平台风格指令辅助函数 ===
+function getPlatformStyleInstructions(platform: SocialMediaPlatform): string {
+  if (["toutiao", "zhihu", "wechat"].includes(platform.id)) {
+    return '请用正式、客观、第三人称的新闻报道风格撰写内容，突出时间节点、任务目标、技术细节和科学意义。多用专业术语和权威引用，避免口语化和主观色彩。结构建议为：导语-背景-细节-意义-国际对比-结论。';
+  }
+  return '';
+}
