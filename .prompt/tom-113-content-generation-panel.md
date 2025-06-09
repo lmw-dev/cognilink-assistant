@@ -23,7 +23,7 @@
 ### 依赖的现有服务 (必须验证接口)
 - 内容生成服务: @src/services/social-media-content-generator.ts
 - 平台模板系统: @src/services/platform-template-system.ts
-- AI服务: @src/services/ai-service.ts
+- AI服务: @src/services/AIService.ts
 - **重要**: 使用前必须通过 `grep_search` 或 `codebase_search` 验证接口方法名和签名
 
 ### 需要遵循的内部规则

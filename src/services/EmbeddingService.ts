@@ -65,6 +65,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// 新增：统一的白名单/黑名单过滤工具函数
+function shouldIndexFile(path: string, whitelist: string[], blacklist: string[]): boolean {
+  const norm = (s: string) => s.trim().replace(/\\/g, '/');
+  path = norm(path);
+  if (blacklist.some(b => path.startsWith(norm(b)))) return false;
+  if (whitelist.length === 0) return true;
+  return whitelist.some(w => path.startsWith(norm(w)));
+}
+
 export class EmbeddingService {
   private plugin: CogniLinkPlugin;
   private logger: Logger;
@@ -120,6 +129,14 @@ export class EmbeddingService {
    * 更新指定笔记的嵌入，支持分片，写入 LanceDB
    */
   async updateEmbedding(note: Note, chunkPrefix = ''): Promise<void> {
+    // 新增：RAG 白/黑名单过滤
+    const rag = this.plugin.settings.rag || {};
+    const whitelist: string[] = rag.indexWhitelist || [];
+    const blacklist: string[] = rag.indexBlacklist || [];
+    if (!shouldIndexFile(note.path, whitelist, blacklist)) {
+      this.logger.info(`[EmbeddingService] 跳过黑/白名单过滤的文件: ${note.path}`);
+      return;
+    }
     const maxChunkTokens = (this.plugin.settings as any).embeddingMaxTokens || 2000;
     const rateLimitMs = (this.plugin.settings as any).embeddingRateLimitMs || 1000;
     const chunks = splitContentByEstimatedTokens(note.content, maxChunkTokens);
@@ -268,7 +285,13 @@ export class EmbeddingService {
     const failedFiles: string[] = [];
     const docs: VectorDocument[] = [];
     const maxLen = (this.plugin.settings as any).embeddingMaxLength ?? 12000;
+    // 新增：获取 RAG 白名单/黑名单
+    const rag = this.plugin.settings.rag || {};
+    const whitelist: string[] = rag.indexWhitelist || [];
+    const blacklist: string[] = rag.indexBlacklist || [];
     for (const file of files) {
+      // 新增：写入 embedding 前先过滤
+      if (!shouldIndexFile(file.path, whitelist, blacklist)) continue;
       try {
         let content = await vault.read(file);
         if (content.length > maxLen) {
